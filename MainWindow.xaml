@@ -181,7 +181,7 @@
 
             <TabItem Name="SubscribeTab" 
                      Header="Subscribe">
-                <Grid>
+                <Grid IsEnabled="{Binding Connected}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -203,8 +203,7 @@
                     </Grid>
 
                     <!-- Broker subscribe area -->
-                    <Grid Grid.Row="1"
-                          IsEnabled="{Binding Connected}">
+                    <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>

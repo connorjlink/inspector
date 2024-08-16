@@ -8,6 +8,8 @@ using System.Drawing;
 using System.Security.Permissions;
 using System.Windows;
 using System.Configuration;
+using System.Collections.Specialized;
+using MQTTnet.Protocol;
 
 namespace inspector
 {
@@ -140,6 +142,17 @@ namespace inspector
         private string _subscribeTopic = string.Empty;
         private string _subscribeQoS = string.Empty;
 
+        private int SubscribeQoSInt
+        {
+            get
+            {
+                // NOTE: for all the listed options, the QoS integer is the first character
+                char value = SubscribeQoS[0];
+                // ASCII hackery ;)
+                return value - '0';
+            }
+        }
+
         public ObservableCollection<string> SubscribedTopics
         {
             get
@@ -175,6 +188,7 @@ namespace inspector
             {
                 _subscribeQoS = value;
                 OnPropertyChanged(nameof(SubscribeQoS));
+                OnPropertyChanged(nameof(SubscribeQoSInt));
             }
         }
 
@@ -321,9 +335,11 @@ namespace inspector
         {
             _mqttFactory = new MqttFactory();
             _mqttClient = (MqttClient)_mqttFactory.CreateMqttClient();
+
+            SubscribedTopics.CollectionChanged += UpdateSubscribeInputs;
         }
 
-        private void handleMissing(string whatsMissing, string context, ref bool hadError)
+        private void HandleMissing(string whatsMissing, string context, ref bool hadError)
         {
             WriteConsole($"Specify a {whatsMissing} to {context}", ERROR);
             hadError = true;
@@ -335,14 +351,14 @@ namespace inspector
 
             const string context = "connect";
 
-            if (IP == "") handleMissing("broker IP", context, ref hadError);
-            if (Port == "") handleMissing("broker port", context, ref hadError);
+            if (IP == "") HandleMissing("broker IP", context, ref hadError);
+            if (Port == "") HandleMissing("broker port", context, ref hadError);
 
             if (EnableTLS)
             {
-                if (CACert == "") handleMissing("root CA certificate", context, ref hadError);
-                if (ClientCert == "") handleMissing("client certificate", context, ref hadError);
-                if (PrivateKey == "") handleMissing("private key", context, ref hadError);
+                if (CACert == "") HandleMissing("root CA certificate", context, ref hadError);
+                if (ClientCert == "") HandleMissing("client certificate", context, ref hadError);
+                if (PrivateKey == "") HandleMissing("private key", context, ref hadError);
             }
 
             if (hadError)
@@ -396,9 +412,6 @@ namespace inspector
                 WriteConsole($"Disconnected from {IP}:{Port}", INFO);
 
                 SubscribedTopics.Clear();
-                UpdateSubscribeInputs();
-
-                EndTask();
             }
 
             catch
@@ -407,9 +420,11 @@ namespace inspector
                 // (Result Code: {response.ResultCode})
                 WriteConsole($"Could not disconnect from {IP}:{Port}", ERROR);
             }
+
+            EndTask();
         }
 
-        private void UpdateSubscribeInputs()
+        private void UpdateSubscribeInputs(object? sender, NotifyCollectionChangedEventArgs e)
         {
             OnPropertyChanged(nameof(IsSubscribedToCurrent));
             OnPropertyChanged(nameof(EnableQoS));
@@ -419,10 +434,8 @@ namespace inspector
         {
             bool hadError = false;
 
-            if (SubscribeTopic == "") handleMissing("subscription topic", context, ref hadError);
-            if (SubscribeQoS == "") handleMissing("subscription QoS", context, ref hadError);
-
-            
+            if (SubscribeTopic == "") HandleMissing("subscription topic", context, ref hadError);
+            if (SubscribeQoS == "") HandleMissing("subscription QoS", context, ref hadError);
 
             // inverting because we only validate if no errors occurred
             return !hadError;
@@ -435,24 +448,66 @@ namespace inspector
 
             if (ValidateSubscribeInputs("subscribe"))
             {
-                SubscribedTopics.Add(SubscribeTopic);
-                UpdateSubscribeInputs();
+                try
+                {
+                    BeginTask("Subscribing to MQTT topic");
 
-                WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", INFO);
+                    // NOTE: MQTT.net enum definition is compatible with straight integers so cast is OK
+                    // AtMostOnce = 0x00,
+                    // AtLeastOnce = 0x01,
+                    // ExactlyOnce = 0x02
+
+                    // TODO: add a checkbox to set NoLocal (we don't get our own messages)
+
+                    var mqttSubscribeOptions = new MqttClientSubscribeOptionsBuilder()
+                        .WithTopicFilter(SubscribeTopic, (MqttQualityOfServiceLevel)SubscribeQoSInt, false)
+                            .Build();
+
+                    var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
+
+                    //foreach (var item in response.Items)
+                    //{
+                    //    item.ResultCode;
+                    //}
+
+                    SubscribedTopics.Add(SubscribeTopic);
+                    WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", INFO);
+                }
+
+                catch
+                {
+                    WriteConsole($"Could not subscribe to {SubscribeTopic} with QoS {SubscribeQoS}", ERROR);
+                }
+
+                EndTask();
             }
         }
 
         public async void Unsubscribe()
         {
-            //TODO: BeginTask()
-            // TODO: mqttnet
-
             if (ValidateSubscribeInputs("unsubscribe"))
             {
-                SubscribedTopics.Remove(SubscribeTopic);
-                UpdateSubscribeInputs();
+                try
+                {
+                    BeginTask("Unsubscribing from MQTT topic");
 
-                WriteConsole($"Unsubscribed from {SubscribeTopic}", INFO);
+                    var mqttUnsubscribeOptions = new MqttClientUnsubscribeOptionsBuilder()
+                        .WithTopicFilter(SubscribeTopic)
+                            .Build();
+
+                    var response = await _mqttClient.UnsubscribeAsync(mqttUnsubscribeOptions);
+                    //TODO: error handling if something went from unsubscribing here
+
+                    SubscribedTopics.Remove(SubscribeTopic);
+                    WriteConsole($"Unsubscribed from {SubscribeTopic}", INFO);
+                }
+
+                catch
+                {
+                    WriteConsole($"Could not unsubscribe from {SubscribeTopic}", ERROR);
+                }
+
+                EndTask();
             }
         }
 

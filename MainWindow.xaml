@@ -24,6 +24,7 @@
             <local:ConnectTextConverter x:Key="ConnectTextConverter"/>
             <local:NotificationBrushConverter x:Key="NotificationBrushConverter"/>
             <local:NotificationTooltipConverter x:Key="NotificationTooltipConverter"/>
+            <local:SubscribeStatusConverter x:Key="SubscribeStatusConverter"/>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -62,6 +63,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- First tab control -->
+        <!-- TODO: disable closing these tabs (dysfunctional otherwise) -->
         <TabControl Grid.Row="0"
                     Grid.RowSpan="3"
                     Grid.Column="0"
@@ -182,17 +184,77 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
+
+                    <!-- Broker connection status -->
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal">
+                            <Label Content="Connection Status:"/>
+                            <Label Content="{Binding Connected, Converter={StaticResource ConnectionStatusConverter}}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Broker subscribe area -->
+                    <Grid Grid.Row="1"
+                          IsEnabled="{Binding Connected}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Margin="5" 
+                                    Grid.Column="0">
+                            <Label Content="MQTT Topic"/>
+                            <ComboBox IsEditable="True"
+                                      Text="{Binding SubscribeTopic}"/>
+                        </StackPanel>
+
+                        <StackPanel Margin="5" 
+                                    Grid.Column="1"
+                                    IsEnabled="{Binding EnableQoS}">
+                            <Label Content="Quality of Service"/>
+                            <ComboBox Text="{Binding SubscribeQoS}">
+                                <ComboBoxItem>0 (At most once)</ComboBoxItem>
+                                <ComboBoxItem>1 (At least once)</ComboBoxItem>
+                                <ComboBoxItem>2 (Exactly once)</ComboBoxItem>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <Button Grid.Row="2"
+                            Margin="5, 5, 5, 5"
+                            Content="{Binding IsSubscribedToCurrent, Converter={StaticResource SubscribeStatusConverter}}"
+                            Click="SubscribeButton_Clicked"/>
+
+                    <!-- Subscribed topics area -->
+                    <Grid Grid.Row="3"
+                          Margin="5, 5, 5, 5">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Label>Subscribed MQTT Topics:</Label>
+                        <ListView Grid.Row="1"
+                                  ItemsSource="{Binding SubscribedTopics}"
+                                  Name="subscribedTopics"
+                                  BorderBrush="Gray"
+                                  BorderThickness="2">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"/>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
                 </Grid>
             </TabItem>
 

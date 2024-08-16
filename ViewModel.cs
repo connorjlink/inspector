@@ -134,7 +134,68 @@ namespace inspector
                 }
             }
         }
-        
+
+        // used for topic subscribe/unsubscribe
+        private ObservableCollection<string> _subscribedTopics = new();
+        private string _subscribeTopic = string.Empty;
+        private string _subscribeQoS = string.Empty;
+
+        public ObservableCollection<string> SubscribedTopics
+        {
+            get
+            {
+                return _subscribedTopics;
+            }
+        }
+
+        public string SubscribeTopic
+        {
+            get
+            {
+                return _subscribeTopic;
+            }
+
+            set
+            {
+                _subscribeTopic = value;
+                OnPropertyChanged(nameof(SubscribeTopic));
+                OnPropertyChanged(nameof(IsSubscribedToCurrent));
+                OnPropertyChanged(nameof(EnableQoS));
+            }
+        }
+
+        public string SubscribeQoS
+        {
+            get
+            {
+                return _subscribeQoS;
+            }
+
+            set
+            {
+                _subscribeQoS = value;
+                OnPropertyChanged(nameof(SubscribeQoS));
+            }
+        }
+
+        public bool IsSubscribedToCurrent
+        {
+            get
+            {
+                return SubscribedTopics.Contains(SubscribeTopic);
+            }
+        }
+
+        public bool EnableQoS
+        {
+            get
+            {
+                // can't edit the QoS if the message is already subscribed
+                return !(Connected && IsSubscribedToCurrent);
+            }
+        }
+
+
         // used to disable editing the IP/Port contols while we are connected
         public bool Editable
         {
@@ -250,12 +311,6 @@ namespace inspector
             {
                 return _consoleOutput;
             }
-
-            set
-            {
-                _consoleOutput = value;
-                OnPropertyChanged(nameof(ConsoleOutput));
-            }
         }
 
 
@@ -268,24 +323,26 @@ namespace inspector
             _mqttClient = (MqttClient)_mqttFactory.CreateMqttClient();
         }
 
+        private void handleMissing(string whatsMissing, string context, ref bool hadError)
+        {
+            WriteConsole($"Specify a {whatsMissing} to {context}", ERROR);
+            hadError = true;
+        }
+
         public async void Connect()
         {
             bool hadError = false;
 
-            void handleMissing(string whatsMissing)
-            {
-                WriteConsole($"Specify a {whatsMissing} to connect", ERROR);
-                hadError = true;
-            }
+            const string context = "connect";
 
-            if (IP == "") handleMissing("broker IP");
-            if (Port == "") handleMissing("broker port");
+            if (IP == "") handleMissing("broker IP", context, ref hadError);
+            if (Port == "") handleMissing("broker port", context, ref hadError);
 
             if (EnableTLS)
             {
-                if (CACert == "") handleMissing("root CA certificate");
-                if (ClientCert == "") handleMissing("client certificate");
-                if (PrivateKey == "") handleMissing("private key");
+                if (CACert == "") handleMissing("root CA certificate", context, ref hadError);
+                if (ClientCert == "") handleMissing("client certificate", context, ref hadError);
+                if (PrivateKey == "") handleMissing("private key", context, ref hadError);
             }
 
             if (hadError)
@@ -337,7 +394,10 @@ namespace inspector
                 await _mqttClient.DisconnectAsync();
                 Connected = false;
                 WriteConsole($"Disconnected from {IP}:{Port}", INFO);
-            
+
+                SubscribedTopics.Clear();
+                UpdateSubscribeInputs();
+
                 EndTask();
             }
 
@@ -346,6 +406,53 @@ namespace inspector
                 // TODO: display more meaningful error message here if not connected
                 // (Result Code: {response.ResultCode})
                 WriteConsole($"Could not disconnect from {IP}:{Port}", ERROR);
+            }
+        }
+
+        private void UpdateSubscribeInputs()
+        {
+            OnPropertyChanged(nameof(IsSubscribedToCurrent));
+            OnPropertyChanged(nameof(EnableQoS));
+        }
+
+        private bool ValidateSubscribeInputs(string context)
+        {
+            bool hadError = false;
+
+            if (SubscribeTopic == "") handleMissing("subscription topic", context, ref hadError);
+            if (SubscribeQoS == "") handleMissing("subscription QoS", context, ref hadError);
+
+            
+
+            // inverting because we only validate if no errors occurred
+            return !hadError;
+        }
+
+        public async void Subscribe()
+        {
+            //TODO: BeginTask()
+            // TODO: mqttnet
+
+            if (ValidateSubscribeInputs("subscribe"))
+            {
+                SubscribedTopics.Add(SubscribeTopic);
+                UpdateSubscribeInputs();
+
+                WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", INFO);
+            }
+        }
+
+        public async void Unsubscribe()
+        {
+            //TODO: BeginTask()
+            // TODO: mqttnet
+
+            if (ValidateSubscribeInputs("unsubscribe"))
+            {
+                SubscribedTopics.Remove(SubscribeTopic);
+                UpdateSubscribeInputs();
+
+                WriteConsole($"Unsubscribed from {SubscribeTopic}", INFO);
             }
         }
 

@@ -47,6 +47,19 @@ namespace inspector
             }
         }
 
+        private void SubscribeButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            if (_viewmodel.IsSubscribedToCurrent)
+            {
+                _viewmodel.Unsubscribe();
+            }
+
+            else
+            {
+                _viewmodel.Subscribe();
+            }
+        }
+
         private void SilenceNotification(object sender, RoutedEventArgs e)
         {
             _viewmodel.ShowNotification = false;

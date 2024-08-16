@@ -443,9 +443,6 @@ namespace inspector
 
         public async void Subscribe()
         {
-            //TODO: BeginTask()
-            // TODO: mqttnet
-
             if (ValidateSubscribeInputs("subscribe"))
             {
                 try
@@ -511,6 +508,81 @@ namespace inspector
             }
         }
 
+
+        // used for publishing parameters
+        private string _publishTopic = string.Empty;
+        private string _publishQoS = string.Empty;
+
+        private bool _retainFlag = false;
+        private bool _isPeriodic = false;
+
+        public bool IsPeriodic
+        {
+            get
+            {
+                return _isPeriodic;
+            }
+
+            set
+            {
+                _isPeriodic = value;
+                OnPropertyChanged(nameof(IsPeriodic));
+            }
+        }
+
+        public bool RetainFlag
+        {
+            get
+            {
+                return _retainFlag;
+            }
+
+            set
+            {
+                _retainFlag = value;
+                OnPropertyChanged(nameof(RetainFlag));
+            }
+        }
+
+        public string PublishQoS
+        {
+            get
+            {
+                return _publishQoS;
+            }
+
+            set
+            {
+                _publishQoS = value;
+                OnPropertyChanged(nameof(PublishQoS));
+                OnPropertyChanged(nameof(PublishQoSInt));
+            }
+        }
+
+        public int PublishQoSInt
+        {
+            get
+            {
+                // NOTE: for all the listed options, the QoS integer is the first character
+                char value = PublishQoS[0];
+                // ASCII hackery ;)
+                return value - '0';
+            }
+        }
+
+        public string PublishTopic
+        {
+            get
+            {
+                return _publishTopic;
+            }
+
+            set
+            {
+                _publishTopic = value;
+                OnPropertyChanged(nameof(PublishTopic));
+            }
+        }
 
         private string Timestamp()
         {

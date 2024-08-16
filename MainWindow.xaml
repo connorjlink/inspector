@@ -179,7 +179,21 @@
 
             <TabItem Name="SubscribeTab" 
                      Header="Subscribe">
-                <TabItem.Content>Background property information goes here.</TabItem.Content>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                </Grid>
             </TabItem>
 
             <TabItem Name="PublishTab" 
@@ -242,8 +256,28 @@
         <StatusBar Grid.Row="3"
                    Grid.ColumnSpan="3"
                    Background="{DynamicResource MahApps.Brushes.Badged.Background}">
+            
+            
             <StatusBarItem>
                 <TextBlock Text="{Binding ConnectionStatusExtended}"/>
+            </StatusBarItem>
+
+            <Separator/>
+
+            <StatusBarItem>
+                <iconPacks:PackIconEntypo Width="16" 
+                                          Height="16" 
+                                          Kind="Message"
+                                          ToolTip="{Binding ProgressText}"/>
+            </StatusBarItem>
+
+            <StatusBarItem>
+                <ProgressBar IsIndeterminate="True" 
+                             Width="100" 
+                             Height="10" 
+                             Style="{x:Null}"
+                             ToolTip="{Binding ProgressText}"
+                             Visibility="{Binding ShowProgress, Converter={StaticResource BooleanToVisibilityConverter}}"/>
             </StatusBarItem>
         </StatusBar>
 

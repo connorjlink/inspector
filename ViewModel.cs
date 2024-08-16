@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Security.Permissions;
 using System.Windows;
+using System.Configuration;
 
 namespace inspector
 {
@@ -42,6 +43,18 @@ namespace inspector
             ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
         }
 
+        // TODO: support multiple tasks (i.e., nesting)
+        private void BeginTask(string message)
+        {
+            ProgressText = message;
+            ShowProgress = true;
+        }
+
+        private void EndTask()
+        {
+            ShowProgress = false;
+        }
+
         // notifcation summary for the console
         private bool _showNotification = false;
         private int _notificationCount = 0;
@@ -71,6 +84,38 @@ namespace inspector
             {
                 _notificationCount = value;
                 OnPropertyChanged(nameof(NotificationCount));
+            }
+        }
+
+        // progress bar for status bar
+        private bool _showProgress = false;
+        private string _progressText = string.Empty;
+
+        public bool ShowProgress
+        {
+            get
+            {
+                return _showProgress;
+            }
+
+            set
+            {
+                _showProgress = value;
+                OnPropertyChanged(nameof(ShowProgress));
+            }
+        }
+
+        public string ProgressText
+        {
+            get
+            {
+                return _showProgress ? _progressText : "No tasks in progress";
+            }
+
+            set
+            {
+                _progressText = value;
+                OnPropertyChanged(nameof(ProgressText));
             }
         }
 
@@ -111,6 +156,7 @@ namespace inspector
             {
                 _connected = value;
                 OnPropertyChanged(nameof(Connected));
+                OnPropertyChanged(nameof(ConnectionStatusExtended));
             }
         }
 
@@ -254,35 +300,53 @@ namespace inspector
                     .WithTcpServer(IP, int.Parse(Port))
                         .Build();
 
-                MqttClientConnectResult response = null;
-
                 try
                 {
-                    using (var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+                    using (var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
                     {
-                        response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
+                        BeginTask("Connecting to MQTT broker");
+
+                        var response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
                         Connected = true;
-                        WriteConsole($"Connected to {IP}:{Port} (Result Code: {response.ResultCode})", ViewModel.INFO);
+                        WriteConsole($"Connected to {IP}:{Port} (Result Code: {response.ResultCode})", INFO);
+
+                        EndTask();
                     }
                 }
 
                 catch
                 {
-                    WriteConsole($"Could not connect to {IP}:{Port} (Result Code: {response.ResultCode})", ViewModel.ERROR);
+                    // TODO: display more meaningful error message here if not connected
+                    // (Result Code: {response.ResultCode})
+                    WriteConsole($"Could not connect to {IP}:{Port}", ERROR);
                 }
             }
 
             else
             {
-                WriteConsole("TLS connections are currently unsupported", ViewModel.ERROR);
+                WriteConsole("TLS connections are currently unsupported", ERROR);
             }
         }
 
         public async void Disconnect()
         {
-            Connected = false;
-            WriteConsole($"Disconnected from {IP}:{Port}", ViewModel.INFO);
+            try
+            {
+                BeginTask("Disconnected from MQTT broker");
 
+                await _mqttClient.DisconnectAsync();
+                Connected = false;
+                WriteConsole($"Disconnected from {IP}:{Port}", INFO);
+            
+                EndTask();
+            }
+
+            catch
+            {
+                // TODO: display more meaningful error message here if not connected
+                // (Result Code: {response.ResultCode})
+                WriteConsole($"Could not disconnect from {IP}:{Port}", ERROR);
+            }
         }
 
 

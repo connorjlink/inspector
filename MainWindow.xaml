@@ -285,9 +285,8 @@
                     <!-- Broker publish area -->
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
-                            <!-- this is a real kludge to get the sizing to not change as we input... -->
-                            <ColumnDefinition Width="5*"/>
-                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Margin="5" 
@@ -308,20 +307,28 @@
                         </StackPanel>
                     </Grid>
 
-                    <Grid Grid.Row="2"
-                          Margin="5, 5, 5, 5">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                        <Label Grid.Row="0"
-                               Content="MQTT Message"/>
+                        <StackPanel Grid.Column="0"
+                                    Margin="5">
+                            <Label Content="MQTT Message"/>
+                            <ComboBox IsEditable="True"
+                                      Text="{Binding PublishMessage}"/>
+                        </StackPanel>
 
-                        <ComboBox Grid.Row="1"
-                                  Text="{Binding PublishMessage}"
-                                  IsEditable="True"/>
-
+                        <StackPanel Grid.Column="1"
+                                    Margin="5">
+                            <Label Content="Publish Format"/>
+                            <ComboBox Text="{Binding PublishFormat}">
+                                <ComboBoxItem>String</ComboBoxItem>
+                                <ComboBoxItem>Binary</ComboBoxItem>
+                                <ComboBoxItem>Protobuf3</ComboBoxItem>
+                            </ComboBox>
+                        </StackPanel>
                     </Grid>
 
                     <Grid Grid.Row="3"
@@ -348,15 +355,23 @@
                                     Grid.Column="1"
                                     Orientation="Horizontal">
                             <CheckBox Content="Periodic"
-                                      IsChecked="{Binding IsPeriodic}"/>
+                                      IsChecked="{Binding IsPeriodic}"
+                                      Margin="0, 0, 5, 0"/>
                             <ComboBox Text="{Binding PeriodicRate}"
-                                      IsEditable="{Binding IsPeriodic}"/>
+                                      IsEditable="True"
+                                      IsEnabled="{Binding IsPeriodic}"/>
+                            <Label Content="ms"/>
                         </StackPanel>
+
+                        <mah:ToggleSwitch Grid.Row="1"
+                                          Grid.Column="2"
+                                          Content="String">
+                        </mah:ToggleSwitch>
                     </Grid>
                     
                     <Button Grid.Row="4"
                             Margin="5, 5, 5, 5"
-                            Content="Publish"
+                            Content="{Binding PublishStatus}"
                             Click="PublishButton_Clicked"/>
                 </Grid>
             </TabItem>

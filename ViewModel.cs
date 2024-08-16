@@ -10,6 +10,7 @@ using System.Windows;
 using System.Configuration;
 using System.Collections.Specialized;
 using MQTTnet.Protocol;
+using MQTTnet.Server;
 
 namespace inspector
 {
@@ -329,12 +330,12 @@ namespace inspector
 
 
         private static MqttFactory _mqttFactory;
-        private static MqttClient _mqttClient;
+        private static MQTTnet.Client.MqttClient _mqttClient;
 
         public ViewModel()
         {
             _mqttFactory = new MqttFactory();
-            _mqttClient = (MqttClient)_mqttFactory.CreateMqttClient();
+            _mqttClient = (MQTTnet.Client.MqttClient)_mqttFactory.CreateMqttClient();
 
             SubscribedTopics.CollectionChanged += UpdateSubscribeInputs;
         }
@@ -473,7 +474,7 @@ namespace inspector
 
                 catch
                 {
-                    WriteConsole($"Could not subscribe to {SubscribeTopic} with QoS {SubscribeQoS}", ERROR);
+                    WriteConsole($"Could not subscribe to {SubscribeTopic}", ERROR);
                 }
 
                 EndTask();
@@ -512,9 +513,25 @@ namespace inspector
         // used for publishing parameters
         private string _publishTopic = string.Empty;
         private string _publishQoS = string.Empty;
+        private string _publishMessage = string.Empty;
 
         private bool _retainFlag = false;
         private bool _isPeriodic = false;
+        private string _periodicRate = string.Empty;
+
+        public string PeriodicRate
+        {
+            get
+            {
+                return _periodicRate;
+            }
+
+            set
+            {
+                _periodicRate = value;
+                OnPropertyChanged(nameof(PeriodicRate));
+            }
+        }
 
         public bool IsPeriodic
         {
@@ -527,6 +544,7 @@ namespace inspector
             {
                 _isPeriodic = value;
                 OnPropertyChanged(nameof(IsPeriodic));
+                OnPropertyChanged(nameof(PublishStatus));
             }
         }
 
@@ -541,6 +559,20 @@ namespace inspector
             {
                 _retainFlag = value;
                 OnPropertyChanged(nameof(RetainFlag));
+            }
+        }
+
+        public string PublishMessage
+        {
+            get
+            {
+                return _publishMessage;
+            }
+
+            set
+            {
+                _publishMessage = value;
+                OnPropertyChanged(nameof(PublishMessage));
             }
         }
 
@@ -581,6 +613,95 @@ namespace inspector
             {
                 _publishTopic = value;
                 OnPropertyChanged(nameof(PublishTopic));
+            }
+        }
+
+        public bool IsTransmitting
+        {
+            get
+            {
+                return false;
+            }
+        }
+
+        public async void Publish()
+        {
+            try
+            {
+                BeginTask("Publishing MQTT Topic");
+
+                switch (PublishFormat)
+                {
+                    case "String":
+                        {
+                            var applicationMessage = new MqttApplicationMessageBuilder()
+                                .WithTopic(PublishTopic)
+                                .WithPayload(PublishMessage)
+                                .WithRetainFlag(RetainFlag)
+                                .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)PublishQoSInt)
+                                .Build();
+
+                            var response = await _mqttClient.PublishAsync(applicationMessage);
+
+                            //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag);
+                            WriteConsole($"Published {PublishMessage} to {PublishTopic} at {PublishQoS} with retain {RetainFlag}", INFO);
+                        }
+                        break;
+
+                    case "Binary":
+                        {
+                            //_mqttClient.PublishAsyncBinary();
+                        }
+                        break;
+
+                    case "Protobuf3":
+                        {
+
+                        }
+                        break;
+                }
+            }
+
+            catch
+            {
+                WriteConsole($"Could not publish {PublishTopic}", ERROR);
+            }
+
+            EndTask();
+        }
+
+        public string PublishStatus
+        {
+            get
+            {
+                if (IsPeriodic)
+                {
+                    if (IsTransmitting)
+                    {
+                        return "Stop Transmitting";
+                    }
+
+                    return "Start Transmitting";
+                }
+                
+                return "Publish";
+            }
+        }
+
+        // string, binary, or protocol buffers 3
+        private string _publishFormat = string.Empty;
+
+        public string PublishFormat
+        {
+            get
+            {
+                return _publishFormat;
+            }
+
+            set
+            {
+                _publishFormat = value;
+                OnPropertyChanged(nameof(PublishFormat));
             }
         }
 

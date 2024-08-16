@@ -34,6 +34,11 @@ namespace inspector
             consoleOutput.ScrollIntoView(consoleOutput.Items[consoleOutput.Items.Count - 1]);
         }
 
+        private void PublishButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            _viewmodel.Publish();
+        }
+
         private void ConnectButton_Clicked(object sender, RoutedEventArgs e)
         {
             if (_viewmodel.Connected)

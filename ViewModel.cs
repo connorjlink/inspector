@@ -14,6 +14,8 @@ using MQTTnet.Server;
 using System;
 using System.Security.RightsManagement;
 using System.Text;
+using System.Runtime.CompilerServices;
+using System.Timers;
 
 namespace inspector
 {
@@ -63,6 +65,26 @@ namespace inspector
             }
 
             viewmodel.ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
+        }
+
+        private Queue<int> _computeQueue = new();
+
+        private void ComputeMessagesPerSecond(Object source, ElapsedEventArgs e)
+        {
+            var diff = _currentMessageCount - _lastMessageCount;
+            _lastMessageCount = _currentMessageCount;
+
+            _computeQueue.Enqueue(diff);
+
+            // store the last three seconds of history
+            if (_computeQueue.Count() == 3)
+            {
+                _computeQueue.Dequeue();
+            }
+
+            _messagesPerSecond = (float)_computeQueue.Average();
+
+            OnPropertyChanged(nameof(ReceivingStatusExtended));
         }
 
         public void WriteConsole(string message, string level)
@@ -372,6 +394,12 @@ namespace inspector
 
             _mqttScheduler = new MqttScheduler(this);
 
+            var timer = new System.Timers.Timer(1000);
+            timer.Elapsed += ComputeMessagesPerSecond;
+            timer.AutoReset = true;
+            timer.Start();
+
+
             SubscribedTopics.CollectionChanged += UpdateSubscribeInputs;
         }
 
@@ -379,6 +407,20 @@ namespace inspector
         {
             WriteConsole($"Specify a {whatsMissing} to {context}", ERROR);
             hadError = true;
+        }
+
+
+        private int _lastMessageCount = 0;
+        private int _currentMessageCount = 0;
+
+        private float _messagesPerSecond;
+
+        public string ReceivingStatusExtended
+        {
+            get
+            {
+                return $"Receiving {_messagesPerSecond} per second...";
+            }
         }
 
         public async void Connect()
@@ -431,6 +473,7 @@ namespace inspector
                             {
                                 try
                                 {
+
                                     float timestamp = TimestampImpl();
                                     string topic = ea.ApplicationMessage.Topic;
                                     string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
@@ -438,6 +481,7 @@ namespace inspector
 
                                     Application.Current.Dispatcher.Invoke(() =>
                                     {
+                                        _currentMessageCount += 1;
                                         // For example, update a TextBox or ListBox
                                         // myTextBox.Text = payload;
                                         //WriteConsole($"Received topic: {topic}", INFO);

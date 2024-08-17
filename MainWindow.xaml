@@ -535,7 +535,7 @@
             <Separator/>
 
             <StatusBarItem>
-                
+                <TextBlock Text="{Binding ReceivingStatusExtended}"/>
             </StatusBarItem>
         </StatusBar>
 

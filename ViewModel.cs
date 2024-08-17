@@ -35,15 +35,20 @@ namespace inspector
         public static string WARNING = "WARNING";
         public static string ERROR = "ERROR";
 
-        public void WriteConsole(string message, string level)
+        public void WriteConsoleImpl(string message, string level, ViewModel viewmodel)
         {
             if (level == ERROR)
             {
-                ShowNotification = true;
-                NotificationCount++;
+                viewmodel.ShowNotification = true;
+                viewmodel.NotificationCount++;
             }
 
-            ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
+            viewmodel.ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
+        }
+
+        public void WriteConsole(string message, string level)
+        {
+            WriteConsoleImpl(message, level, this);
         }
 
         // TODO: support multiple tasks (i.e., nesting)
@@ -330,12 +335,16 @@ namespace inspector
 
 
         private static MqttFactory _mqttFactory;
-        private static MQTTnet.Client.MqttClient _mqttClient;
+        public static MQTTnet.Client.MqttClient _mqttClient;
+
+        private static MqttScheduler _mqttScheduler;
 
         public ViewModel()
         {
             _mqttFactory = new MqttFactory();
             _mqttClient = (MQTTnet.Client.MqttClient)_mqttFactory.CreateMqttClient();
+
+            _mqttScheduler = new MqttScheduler(this);
 
             SubscribedTopics.CollectionChanged += UpdateSubscribeInputs;
         }
@@ -620,12 +629,33 @@ namespace inspector
         {
             get
             {
+                if (_mqttScheduler.ScheduledMessages.ContainsKey(PublishTopic))
+                {
+                    return true;
+                }
+
                 return false;
             }
         }
 
         public async void Publish()
         {
+            bool hadError = false;
+
+            const string context = "publish";
+
+            if (PublishTopic == "") HandleMissing("topic", context, ref hadError);
+            if (PublishQoS == "") HandleMissing("quality of service", context, ref hadError);
+            if (IsPeriodic)
+            {
+                if (PeriodicRate == "") HandleMissing("periodic interval", context, ref hadError);
+            }
+
+            if (hadError)
+            {
+                return;
+            }
+
             try
             {
                 BeginTask("Publishing MQTT Topic");
@@ -634,17 +664,37 @@ namespace inspector
                 {
                     case "String":
                         {
-                            var applicationMessage = new MqttApplicationMessageBuilder()
-                                .WithTopic(PublishTopic)
-                                .WithPayload(PublishMessage)
-                                .WithRetainFlag(RetainFlag)
-                                .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)PublishQoSInt)
-                                .Build();
+                            if (!IsPeriodic)
+                            {
+                                var applicationMessage = new MqttApplicationMessageBuilder()
+                                    .WithTopic(PublishTopic)
+                                        .WithPayload(PublishMessage)
+                                            .WithRetainFlag(RetainFlag)
+                                                .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)PublishQoSInt)
+                                                    .Build();
 
-                            var response = await _mqttClient.PublishAsync(applicationMessage);
+                                //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag);
 
-                            //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag);
-                            WriteConsole($"Published {PublishMessage} to {PublishTopic} at {PublishQoS} with retain {RetainFlag}", INFO);
+                                var response = await _mqttClient.PublishAsync(applicationMessage);
+                                var retain = RetainFlag ? "with" : "without";
+                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at {PublishQoS} {RetainFlag} retain", INFO);
+                            }
+
+                            else
+                            {
+                                // TODO: add support for other publish formats (binary, protobuf) here!
+                                if (!IsTransmitting)
+                                {
+                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag, int.Parse(PeriodicRate));
+                                }
+
+                                else
+                                {
+                                    _mqttScheduler.TryRemoveMessageSchedule(PublishTopic);
+                                }
+
+                                OnPropertyChanged(nameof(IsTransmitting));
+                            }
                         }
                         break;
 

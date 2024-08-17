@@ -11,11 +11,30 @@ using System.Configuration;
 using System.Collections.Specialized;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
+using System;
+using System.Security.RightsManagement;
+using System.Text;
 
 namespace inspector
 {
     public class ViewModel : INotifyPropertyChanged
     {
+        public class LoggedMessage
+        {
+            public LoggedMessage(float timestamp, string topic, string message, int qos)
+            {
+                Timestamp = timestamp;
+                Topic = topic;
+                Message = message;
+                QoS = qos;
+            }
+
+            public float Timestamp { get; set; }
+            public string Topic { get; set; }
+            public string Message { get; set; }
+            public int QoS { get; set; }
+        }
+
         private bool _connected = false;
 
         // host configuration
@@ -152,10 +171,7 @@ namespace inspector
         {
             get
             {
-                // NOTE: for all the listed options, the QoS integer is the first character
-                char value = SubscribeQoS[0];
-                // ASCII hackery ;)
-                return value - '0';
+                return StringToQoS(SubscribeQoS);
             }
         }
 
@@ -333,6 +349,16 @@ namespace inspector
             }
         }
 
+        private ObservableCollection<LoggedMessage> _allMessagesData = new();
+
+        public ObservableCollection<LoggedMessage> AllMessagesData
+        {
+            get
+            {
+                return _allMessagesData;
+            }
+        }
+
 
         private static MqttFactory _mqttFactory;
         public static MQTTnet.Client.MqttClient _mqttClient;
@@ -393,7 +419,53 @@ namespace inspector
                         Connected = true;
                         WriteConsole($"Connected to {IP}:{Port} (Result Code: {response.ResultCode})", INFO);
 
-                        EndTask();
+                        var concurrent = new SemaphoreSlim(Environment.ProcessorCount);
+
+                        _mqttClient.ApplicationMessageReceivedAsync += async ea =>
+                        {
+                            // TODO: utilize shutdownToken for WaitASync, Task.Run
+
+                            await concurrent.WaitAsync().ConfigureAwait(false);
+
+                            async Task ProcessAsync()
+                            {
+                                try
+                                {
+                                    float timestamp = TimestampImpl();
+                                    string topic = ea.ApplicationMessage.Topic;
+                                    string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
+                                    int qos = (int)ea.ApplicationMessage.QualityOfServiceLevel;
+
+                                    Application.Current.Dispatcher.Invoke(() =>
+                                    {
+                                        // For example, update a TextBox or ListBox
+                                        // myTextBox.Text = payload;
+                                        //WriteConsole($"Received topic: {topic}", INFO);
+                                        AllMessagesData.Add(new LoggedMessage(timestamp, topic, message, qos));
+                                        OnPropertyChanged(nameof(AllMessagesData));
+                                    });
+
+                                    
+
+                                    // DO YOUR WORK HERE!
+                                    //await Task.Delay(1000);
+
+                                    //return Task.CompletedTask;
+                                }
+
+                                catch
+                                {
+
+                                }
+
+                                finally
+                                {
+                                    concurrent.Release();
+                                }
+                            }
+
+                            _ = Task.Run(ProcessAsync);
+                        };
                     }
                 }
 
@@ -403,6 +475,8 @@ namespace inspector
                     // (Result Code: {response.ResultCode})
                     WriteConsole($"Could not connect to {IP}:{Port}", ERROR);
                 }
+
+                EndTask();
             }
 
             else
@@ -552,8 +626,7 @@ namespace inspector
             set
             {
                 _isPeriodic = value;
-                OnPropertyChanged(nameof(IsPeriodic));
-                OnPropertyChanged(nameof(PublishStatus));
+                UpdatePublishTab();
             }
         }
 
@@ -600,14 +673,19 @@ namespace inspector
             }
         }
 
+        private int StringToQoS(string str)
+        {
+            // NOTE: for all the listed options, the QoS integer is the first character
+            char value = str[0];
+            // ASCII hackery ;)
+            return value - '0';
+        }
+
         public int PublishQoSInt
         {
             get
             {
-                // NOTE: for all the listed options, the QoS integer is the first character
-                char value = PublishQoS[0];
-                // ASCII hackery ;)
-                return value - '0';
+                return StringToQoS(PublishQoS);
             }
         }
 
@@ -621,7 +699,7 @@ namespace inspector
             set
             {
                 _publishTopic = value;
-                OnPropertyChanged(nameof(PublishTopic));
+                UpdatePublishTab();
             }
         }
 
@@ -629,13 +707,95 @@ namespace inspector
         {
             get
             {
-                if (_mqttScheduler.ScheduledMessages.ContainsKey(PublishTopic))
+                if (_mqttScheduler.IsMessageScheduled(PublishTopic))
                 {
                     return true;
                 }
 
                 return false;
             }
+        }
+
+        public bool IsPausable
+        {
+            get
+            {
+                return IsPeriodic && IsTransmitting;
+            }
+        }
+
+        public bool IsOnline
+        {
+            get
+            {
+                return IsPeriodic && IsTransmitting && !IsPaused;
+            }
+        }
+
+        public bool IsEditable
+        {
+            get
+            {
+                return !IsOnline;
+            }
+        }
+
+        public bool IsPaused
+        {
+            get
+            {
+                if (_mqttScheduler.IsMessagePaused(PublishTopic))
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        public string TransmissionStatus
+        {
+            get
+            {
+                if (IsTransmitting)
+                {
+                    if (IsPaused)
+                    {
+                        return "PAUSED";
+                    }
+
+                    return "ONLINE";
+                }
+
+                if (IsPeriodic)
+                {
+                    return "PENDING";
+                }
+
+                return "SINGLE SHOT";
+            }
+        }
+
+        public void Pause()
+        {
+            if (_mqttScheduler.TryPauseMessage(PublishTopic))
+            {
+                UpdatePublishTab();
+                return;
+            }
+
+            WriteConsole($"Could not pause {PublishTopic}", ERROR);
+        }
+
+        public void Resume()
+        {
+            if (_mqttScheduler.TryResumeMessage(PublishTopic))
+            {
+                UpdatePublishTab();
+                return;
+            }
+
+            WriteConsole($"Could not resume {PublishTopic}", ERROR);
         }
 
         public async void Publish()
@@ -677,7 +837,7 @@ namespace inspector
 
                                 var response = await _mqttClient.PublishAsync(applicationMessage);
                                 var retain = RetainFlag ? "with" : "without";
-                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at {PublishQoS} {RetainFlag} retain", INFO);
+                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", INFO);
                             }
 
                             else
@@ -692,8 +852,6 @@ namespace inspector
                                 {
                                     _mqttScheduler.TryRemoveMessageSchedule(PublishTopic);
                                 }
-
-                                OnPropertyChanged(nameof(IsTransmitting));
                             }
                         }
                         break;
@@ -717,7 +875,20 @@ namespace inspector
                 WriteConsole($"Could not publish {PublishTopic}", ERROR);
             }
 
+            UpdatePublishTab();
             EndTask();
+        }
+
+        public void UpdatePublishTab()
+        {
+            OnPropertyChanged(nameof(IsPeriodic));
+            OnPropertyChanged(nameof(IsTransmitting));
+            OnPropertyChanged(nameof(PublishStatus));
+            OnPropertyChanged(nameof(TransmissionStatus));
+            OnPropertyChanged(nameof(IsPausable));
+            OnPropertyChanged(nameof(IsPaused));
+            OnPropertyChanged(nameof(IsOnline));
+            OnPropertyChanged(nameof(IsEditable));
         }
 
         public string PublishStatus
@@ -755,10 +926,15 @@ namespace inspector
             }
         }
 
+        private float TimestampImpl()
+        {
+            return Runtime.CurrentRuntime / 1000.0f;
+        }
+
         private string Timestamp()
         {
             // ms -> s
-            return $"[{Runtime.CurrentRuntime / 1000.0f}]";
+            return $"[{TimestampImpl()}]";
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

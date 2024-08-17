@@ -7,20 +7,33 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Timers;
+using System.Windows.Documents;
 
 // AI-assisted
 public class MqttScheduler
 {
-    private ViewModel _viewmodel;
-    private ConcurrentDictionary<string, System.Timers.Timer> _scheduledMessages = new();
-
-    public ConcurrentDictionary<string, System.Timers.Timer> ScheduledMessages
+    private class ScheduledMessage
     {
-        get
+        public System.Timers.Timer _timer;
+        public bool _paused;
+
+        public ScheduledMessage(System.Timers.Timer timer)
         {
-            return _scheduledMessages;
+            _timer = timer;
+            _paused = false;
         }
     }
+
+    private ViewModel _viewmodel;
+    private ConcurrentDictionary<string, ScheduledMessage> _scheduledMessages = new();
+
+    //private ConcurrentDictionary<string, System.Timers.Timer> ScheduledMessages
+    //{
+    //    get
+    //    {
+    //        return _scheduledMessages;
+    //    }
+    //}
 
     public MqttScheduler(ViewModel viewmodel)
     {
@@ -43,7 +56,7 @@ public class MqttScheduler
     {
         if (_scheduledMessages.ContainsKey(topic))
         {
-            throw new InvalidOperationException($"A schedule for '{topic}' already exists.");
+            throw new InvalidOperationException($"A schedule for '{topic}' already exists");
         }
 
         var timer = new System.Timers.Timer(intervalInMilliseconds)
@@ -54,7 +67,8 @@ public class MqttScheduler
 
         timer.Elapsed += async (sender, e) => await PublishAsync(topic, payload, qos, retain);
 
-        _scheduledMessages[topic] = timer;
+        // NOTE: the Messaage constructor defaults to *not paused*
+        _scheduledMessages[topic] = new ScheduledMessage(timer);
 
         _viewmodel.WriteConsole($"Started transmitting {topic} every {intervalInMilliseconds} ms", ViewModel.INFO);
     }
@@ -64,12 +78,26 @@ public class MqttScheduler
         return _scheduledMessages.ContainsKey(topic);
     }
 
+    public bool IsMessagePaused(string topic)
+    {
+        if (_scheduledMessages.TryGetValue(topic, out var message))
+        {
+            if (message._paused)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool TryPauseMessage(string topic)
     {
-        if (_scheduledMessages.TryGetValue(topic, out var timer))
+        if (_scheduledMessages.TryGetValue(topic, out var message))
         {
             _viewmodel.WriteConsole($"Paused {topic}", ViewModel.INFO);
-            timer.Stop();
+            message._timer.Stop();
+            message._paused = true;
             return true;
         }
 
@@ -78,10 +106,11 @@ public class MqttScheduler
 
     public bool TryResumeMessage(string topic)
     {
-        if (_scheduledMessages.TryGetValue(topic, out var timer))
+        if (_scheduledMessages.TryGetValue(topic, out var message))
         {
             _viewmodel.WriteConsole($"Resumed {topic}", ViewModel.INFO);
-            timer.Start();
+            message._timer.Start();
+            message._paused = false;
             return true;
         }
 
@@ -90,11 +119,11 @@ public class MqttScheduler
 
     public bool TryRemoveMessageSchedule(string topic)
     {
-        if (_scheduledMessages.TryRemove(topic, out var timer))
+        if (_scheduledMessages.TryRemove(topic, out var message))
         {
             _viewmodel.WriteConsole($"Stopped transmitting {topic}", ViewModel.INFO);
-            timer.Stop();
-            timer.Dispose();
+            message._timer.Stop();
+            message._timer.Dispose();
             return true;
         }
 

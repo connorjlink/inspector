@@ -26,12 +26,32 @@ namespace inspector
 
             this.DataContext = new ViewModel();
             _viewmodel.ConsoleOutput.CollectionChanged += ConsoleOutput_CollectionChanged;
+            //_viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_CollectionChanged;
         }
 
         private void ConsoleOutput_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             // autoscroll the list to the most recent items
             consoleOutput.ScrollIntoView(consoleOutput.Items[consoleOutput.Items.Count - 1]);
+        }
+
+        private void AllMessagesData_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // autoscroll the data grid to the most recent items
+            allMessagesData.ScrollIntoView(allMessagesData.Items[allMessagesData.Items.Count - 1]);
+        }
+
+        private void PauseButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            if (_viewmodel.IsPaused)
+            {
+                _viewmodel.Resume();
+            }
+
+            else
+            {
+                _viewmodel.Pause();
+            }
         }
 
         private void PublishButton_Clicked(object sender, RoutedEventArgs e)

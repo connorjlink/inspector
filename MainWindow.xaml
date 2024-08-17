@@ -25,6 +25,7 @@
             <local:NotificationBrushConverter x:Key="NotificationBrushConverter"/>
             <local:NotificationTooltipConverter x:Key="NotificationTooltipConverter"/>
             <local:SubscribeStatusConverter x:Key="SubscribeStatusConverter"/>
+            <local:PauseResumeButtonConverter x:Key="PauseResumeButtonConverter"/>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -181,7 +182,7 @@
 
             <TabItem Name="SubscribeTab" 
                      Header="Subscribe">
-                <Grid IsEnabled="{Binding Connected}">
+                <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -203,7 +204,8 @@
                     </Grid>
 
                     <!-- Broker subscribe area -->
-                    <Grid Grid.Row="1">
+                    <Grid Grid.Row="1"
+                          IsEnabled="{Binding Connected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -229,13 +231,15 @@
                     </Grid>
 
                     <Button Grid.Row="2"
-                            Margin="5, 5, 5, 5"
+                            Margin="5"
                             Content="{Binding IsSubscribedToCurrent, Converter={StaticResource SubscribeStatusConverter}}"
-                            Click="SubscribeButton_Clicked"/>
+                            Click="SubscribeButton_Clicked"
+                            IsEnabled="{Binding Connected}"/>
 
                     <!-- Subscribed topics area -->
                     <Grid Grid.Row="3"
-                          Margin="5, 5, 5, 5">
+                          Margin="5"
+                          IsEnabled="{Binding Connected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
@@ -259,8 +263,11 @@
 
             <TabItem Name="PublishTab" 
                      Header="Publish">
-                <Grid IsEnabled="{Binding Connected}">
+                <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -282,15 +289,17 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Broker publish area -->
-                    <Grid Grid.Row="1">
+                    <!-- Topic/QoS publish area -->
+                    <Grid Grid.Row="1"
+                          IsEnabled="{Binding Connected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Margin="5" 
-                                    Grid.Column="0">
+                                    Grid.Column="0"
+                                    IsEnabled="True">
                             <Label Content="MQTT Topic"/>
                             <ComboBox IsEditable="True"
                                       Text="{Binding PublishTopic}"/>
@@ -307,7 +316,9 @@
                         </StackPanel>
                     </Grid>
 
-                    <Grid Grid.Row="2">
+                    <!-- message/format publish area -->
+                    <Grid Grid.Row="2"
+                          IsEnabled="{Binding Connected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -331,8 +342,10 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- configuration flags area -->
                     <Grid Grid.Row="3"
-                          Margin="5, 5, 5, 5">
+                          Margin="5"
+                          IsEnabled="{Binding Connected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -355,24 +368,68 @@
                                     Grid.Column="1"
                                     Orientation="Horizontal">
                             <CheckBox Content="Periodic"
-                                      IsChecked="{Binding IsPeriodic}"
-                                      Margin="0, 0, 5, 0"/>
-                            <ComboBox Text="{Binding PeriodicRate}"
+                                      IsChecked="{Binding IsPeriodic}"/>
+                            <ComboBox Margin="5"
+                                      Text="{Binding PeriodicRate}"
                                       IsEditable="True"
                                       IsEnabled="{Binding IsPeriodic}"/>
                             <Label Content="ms"/>
                         </StackPanel>
-
-                        <mah:ToggleSwitch Grid.Row="1"
-                                          Grid.Column="2"
-                                          Content="String">
-                        </mah:ToggleSwitch>
                     </Grid>
+
+                    <Separator Grid.Row="4"
+                               Margin="5"/>
                     
-                    <Button Grid.Row="4"
-                            Margin="5, 5, 5, 5"
+                    <!-- transmission status area -->
+                    <Grid Grid.Row="5"
+                          IsEnabled="{Binding Connected}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0"
+                              Margin="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Label Grid.Column="0"
+                                   Content="Transmit Status:"/>
+
+                            <Label Grid.Column="1"
+                                   Content="{Binding TransmissionStatus}"/>
+
+                            <mah:ProgressRing Grid.Column="2"
+                                              Height="20"
+                                              Width="20"
+                                              IsActive="{Binding IsOnline}"
+                                              HorizontalAlignment="Left"
+                                              Margin="5, 0, 0, 0"
+                                              Foreground="{DynamicResource MahApps.Brushes.Badged.Background}"/>
+
+                            <!--For the button once we are done testing pause/play icons!-->
+                            <!--Content="{Binding PauseStatus}"-->
+                            <Button Grid.Column="3"
+                                    HorizontalAlignment="Right"
+                                    Visibility="{Binding IsPausable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Click="PauseButton_Clicked">
+                                <iconPacks:PackIconEntypo Kind="{Binding IsPaused, Converter={StaticResource PauseResumeButtonConverter}}"/>
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    <Separator Grid.Row="6"
+                               Margin="5"/>
+
+                    <Button Grid.Row="7"
+                            Margin="5"
                             Content="{Binding PublishStatus}"
-                            Click="PublishButton_Clicked"/>
+                            Click="PublishButton_Clicked"
+                            IsEnabled="{Binding Connected}"/>
                 </Grid>
             </TabItem>
         </TabControl>
@@ -383,7 +440,20 @@
                     Margin="10">
             <TabItem Name="AllMessagesTab" 
                      Header="All Messages">
-                <TabItem.Content>Something something.</TabItem.Content>
+                <Grid>
+                    <DataGrid Name="allMessagesData"
+                              DataContext="{Binding AllMessagesData}"
+                              ItemsSource="{Binding}"
+                              AutoGenerateColumns="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}"/>
+                            <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding Message}"/>
+                            <DataGridTextColumn Header="QoS" Binding="{Binding QoS}"/>
+                        </DataGrid.Columns>
+
+                    </DataGrid>
+                </Grid>
             </TabItem>
 
             <TabItem Name="LiveMessagesTab" 
@@ -432,7 +502,6 @@
                    Grid.ColumnSpan="3"
                    Background="{DynamicResource MahApps.Brushes.Badged.Background}">
             
-            
             <StatusBarItem>
                 <TextBlock Text="{Binding ConnectionStatusExtended}"/>
             </StatusBarItem>
@@ -453,6 +522,20 @@
                              Style="{x:Null}"
                              ToolTip="{Binding ProgressText}"
                              Visibility="{Binding ShowProgress, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            </StatusBarItem>
+
+            <Separator/>
+
+            
+            <!-- TODO: also could do this as an up/down arrow setup like some download/upload speed things would show -->
+            <StatusBarItem>
+                <TextBlock>Transmitting 4 messages...</TextBlock>
+            </StatusBarItem>
+
+            <Separator/>
+
+            <StatusBarItem>
+                
             </StatusBarItem>
         </StatusBar>
 

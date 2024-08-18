@@ -101,7 +101,7 @@
                             <Label Content="Broker IP"/>
                             <ComboBox IsEditable="True"
                                       Text="{Binding IP}"
-                                      IsEnabled="{Binding Editable}"/>
+                                      IsEnabled="{Binding NotConnected}"/>
                         </StackPanel>
 
                         <StackPanel Margin="5" 
@@ -109,7 +109,7 @@
                             <Label Content="Broker Port"/>
                             <ComboBox IsEditable="True"
                                       Text="{Binding Port}"
-                                      IsEnabled="{Binding Editable}"/>
+                                      IsEnabled="{Binding NotConnected}"/>
                         </StackPanel>
                     </Grid>
 
@@ -120,7 +120,7 @@
                           Grid.Row="3">
                         <StackPanel>
                             <CheckBox Margin="5"
-                                      Content="Enable SSL/TLS Encryption"
+                                      Content="Enable TLS Encryption"
                                       IsChecked="{Binding EnableTLS}"/>
 
                             <Grid IsEnabled="{Binding EnableTLS}">
@@ -220,7 +220,7 @@
 
                         <StackPanel Margin="5" 
                                     Grid.Column="1"
-                                    IsEnabled="{Binding EnableQoS}">
+                                    IsEnabled="{Binding IsSubscribeQoSEditable}">
                             <Label Content="Quality of Service"/>
                             <ComboBox Text="{Binding SubscribeQoS}">
                                 <ComboBoxItem>0 (At most once)</ComboBoxItem>

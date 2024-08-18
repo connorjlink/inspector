@@ -21,50 +21,24 @@ namespace inspector
 {
     public class ViewModel : INotifyPropertyChanged
     {
-        public class LoggedMessage
+        private const string NO_BROKER_CONNECTION = "Not connected to a broker";
+
+        public void WriteConsoleImpl(string message, LogLevel loglevel, ViewModel viewmodel)
         {
-            public LoggedMessage(float timestamp, string topic, string message, int qos)
-            {
-                Timestamp = timestamp;
-                Topic = topic;
-                Message = message;
-                QoS = qos;
-            }
-
-            public float Timestamp { get; set; }
-            public string Topic { get; set; }
-            public string Message { get; set; }
-            public int QoS { get; set; }
-        }
-
-        private bool _connected = false;
-
-        // host configuration
-        private string _ip = string.Empty;
-        private string _port = string.Empty;
-
-        // tls configuration
-        private bool _enableTLS = false;
-        private string _caCert = string.Empty;
-        private string _clientCert = string.Empty;
-        private string _privateKey = string.Empty;
-
-        // stores our status messages
-        private ObservableCollection<string> _consoleOutput = new();
-
-        public static string INFO = "INFO";
-        public static string WARNING = "WARNING";
-        public static string ERROR = "ERROR";
-
-        public void WriteConsoleImpl(string message, string level, ViewModel viewmodel)
-        {
-            if (level == ERROR)
+            if (loglevel == LogLevel.Error)
             {
                 viewmodel.ShowNotification = true;
                 viewmodel.NotificationCount++;
             }
 
-            viewmodel.ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
+            var level = loglevel switch
+            {
+                LogLevel.Info => "INFO",
+                LogLevel.Warning => "WARNING",
+                LogLevel.Error => "ERROR",
+                _ => throw new NotImplementedException(),
+            };
+            viewmodel.ConsoleData.Add($"{Timestamp()} {level}: {message}");
         }
 
         private Queue<int> _sendingPerSecondQueue = new();
@@ -130,7 +104,7 @@ namespace inspector
             OnPropertyChanged(nameof(SendingPerSecond));
         }
 
-        private const string NO_BROKER_CONNECTION = "Not connected to a broker";
+        
 
         public string ConnectionToolTip
         {
@@ -242,13 +216,13 @@ namespace inspector
         }
 
         // TODO: support multiple tasks (i.e., nesting)
-        private void BeginTask(string message)
+        private void BeginJob(string message)
         {
             ProgressText = message;
             ShowProgress = true;
         }
 
-        private void EndTask()
+        private void EndJob()
         {
             ShowProgress = false;
         }
@@ -336,7 +310,6 @@ namespace inspector
         // used for topic subscribe/unsubscribe
         private ObservableCollection<string> _subscribedTopics = new();
         private string _subscribeTopic = string.Empty;
-        private string _subscribeQoS = string.Empty;
 
         private int SubscribeQoSInt
         {
@@ -366,10 +339,15 @@ namespace inspector
                 _subscribeTopic = value;
                 OnPropertyChanged(nameof(SubscribeTopic));
                 OnPropertyChanged(nameof(IsSubscribedToCurrent));
-                OnPropertyChanged(nameof(EnableQoS));
+                OnPropertyChanged(nameof(IsSubscribeQoSEditable));
             }
         }
 
+
+        private string _subscribeQoS = string.Empty;
+        /// <summary>
+        /// SubscribeQoS stores the contents of the quality of service combobox in the Subscribe tab
+        /// </summary>
         public string SubscribeQoS
         {
             get
@@ -385,34 +363,12 @@ namespace inspector
             }
         }
 
-        public bool IsSubscribedToCurrent
-        {
-            get
-            {
-                return SubscribedTopics.Contains(SubscribeTopic);
-            }
-        }
-
-        public bool EnableQoS
-        {
-            get
-            {
-                // can't edit the QoS if the message is already subscribed
-                return !(Connected && IsSubscribedToCurrent);
-            }
-        }
 
 
-        // used to disable editing the IP/Port contols while we are connected
-        public bool Editable
-        {
-            get
-            {
-                return !Connected;
-            }
-        }
-
-
+        private bool _connected = false;
+        /// <summary>
+        /// Connected stores the current broker connection state
+        /// </summary>
         public bool Connected
         {
             get
@@ -424,7 +380,7 @@ namespace inspector
             {
                 _connected = value;
                 OnPropertyChanged(nameof(Connected));
-                OnPropertyChanged(nameof(Editable));
+                OnPropertyChanged(nameof(NotConnected));
                 OnPropertyChanged(nameof(ConnectionStatusExtended));
                 OnPropertyChanged(nameof(ConnectionToolTip));
                 OnPropertyChanged(nameof(SendingPerSecond));
@@ -434,6 +390,25 @@ namespace inspector
             }
         }
 
+
+        /// <summary>
+        /// NotConnected stores the inverse current broker connection state
+        /// <br/>
+        /// <b>USAGE: disable various controls to prevent editing when connected</b>
+        /// </summary>
+        public bool NotConnected
+        {
+            get
+            {
+                return !Connected;
+            }
+        }
+
+
+        private string _ip = string.Empty;
+        /// <summary>
+        /// IP stores the contents of the broker IP combobox in the Connect tab
+        /// </summary>
         public string IP
         {
             get
@@ -448,6 +423,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _port = string.Empty;
+        /// <summary>
+        /// Port stores the contents of the broker port combobox in the Connect tab
+        /// </summary>
         public string Port
         {
             get
@@ -462,6 +443,13 @@ namespace inspector
             }
         }
 
+
+        private bool _enableTLS = false;
+        /// <summary>
+        /// EnableTLS stores the contents of the TLS encryption checkbox in the Connect tab
+        /// <br/>
+        /// <b>NOTE: setter updates the extended connection status statusbar item tooltip </b>
+        /// </summary>
         public bool EnableTLS
         {
             get
@@ -477,6 +465,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _caCert = string.Empty;
+        /// <summary>
+        /// CACert stores the contents of the CA certificate entry combobox in the Connect tab
+        /// </summary>
         public string CACert
         {
             get
@@ -491,6 +485,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _clientCert = string.Empty;
+        /// <summary>
+        /// ClientCert stores the contents of the local/client certificate entry combobox in the Conncet tab
+        /// </summary>
         public string ClientCert
         {
             get
@@ -505,6 +505,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _privateKey = string.Empty;
+        /// <summary>
+        /// PrivateKey stores the contents of the client private key cerficiate entry combobox in the Connect tab
+        /// </summary>
         public string PrivateKey
         {
             get
@@ -519,16 +525,44 @@ namespace inspector
             }
         }
 
-        public ObservableCollection<string> ConsoleOutput
+
+        public bool IsSubscribedToCurrent
         {
             get
             {
-                return _consoleOutput;
+                return SubscribedTopics.Contains(SubscribeTopic);
             }
         }
 
-        private ObservableCollection<LoggedMessage> _allMessagesData = new();
+        public bool IsSubscribeQoSEditable
+        {
+            get
+            {
+                // can't edit the QoS if the message is already subscribed
+                return !(Connected && IsSubscribedToCurrent);
+            }
+        }
 
+
+
+        private ObservableCollection<string> _consoleData = new();
+        /// <summary>
+        /// ConsoleData is the item source for the listview in the Console window
+        /// </summary>
+        public ObservableCollection<string> ConsoleData
+        {
+            get
+            {
+                return _consoleData;
+            }
+        }
+
+
+
+        private ObservableCollection<LoggedMessage> _allMessagesData = new();
+        /// <summary>
+        /// AllMessageData is the item source for the all messages datagrid in the Message window
+        /// </summary>
         public ObservableCollection<LoggedMessage> AllMessagesData
         {
             get
@@ -537,15 +571,12 @@ namespace inspector
             }
         }
 
-        public class PublishMessageData
-        {
-            public string Topic;
-            public string Status;
-        }
 
-        private ObservableCollection<PublishMessageData> _publishMessagesData = new();
-
-        public ObservableCollection<PublishMessageData> PublishMessagesData
+        private ObservableCollection<CurrentMessage> _publishMessagesData = new();
+        /// <summary>
+        /// PublishMessageData is the item source for the active messages datagrid in the Publish tab
+        /// </summary>
+        public ObservableCollection<CurrentMessage> PublishMessagesData
         {
             get
             {
@@ -571,8 +602,12 @@ namespace inspector
             timer.AutoReset = true;
             timer.Start();
 
-
-            SubscribedTopics.CollectionChanged += UpdateSubscribeInputs;
+            // 
+            SubscribedTopics.CollectionChanged += (s, ea) =>
+            {
+                OnPropertyChanged(nameof(IsSubscribedToCurrent));
+                OnPropertyChanged(nameof(IsSubscribeQoSEditable));
+            };
         }
 
         private void HandleMissing(string whatsMissing, string context, ref bool hadError)
@@ -613,7 +648,7 @@ namespace inspector
                 {
                     using (var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
                     {
-                        BeginTask("Connecting to MQTT broker");
+                        BeginJob("Connecting to MQTT broker");
 
                         var response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
                         Connected = true;
@@ -631,7 +666,6 @@ namespace inspector
                             {
                                 try
                                 {
-
                                     float timestamp = TimestampImpl();
                                     string topic = ea.ApplicationMessage.Topic;
                                     string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
@@ -647,12 +681,7 @@ namespace inspector
                                         OnPropertyChanged(nameof(AllMessagesData));
                                     });
 
-                                    
-
-                                    // DO YOUR WORK HERE!
                                     //await Task.Delay(1000);
-
-                                    //return Task.CompletedTask;
                                 }
 
                                 catch
@@ -678,7 +707,7 @@ namespace inspector
                     WriteConsole($"Could not connect to {IP}:{Port}", ERROR);
                 }
 
-                EndTask();
+                EndJob();
             }
 
             else
@@ -691,7 +720,7 @@ namespace inspector
         {
             try
             {
-                BeginTask("Disconnected from MQTT broker");
+                BeginJob("Disconnected from MQTT broker");
 
                 await _mqttClient.DisconnectAsync();
                 Connected = false;
@@ -702,18 +731,15 @@ namespace inspector
 
             catch
             {
-                // TODO: display more meaningful error message here if not connected
-                // (Result Code: {response.ResultCode})
                 WriteConsole($"Could not disconnect from {IP}:{Port}", ERROR);
             }
 
-            EndTask();
+            EndJob();
         }
 
         private void UpdateSubscribeInputs(object? sender, NotifyCollectionChangedEventArgs e)
         {
-            OnPropertyChanged(nameof(IsSubscribedToCurrent));
-            OnPropertyChanged(nameof(EnableQoS));
+            
         }
 
         private bool ValidateSubscribeInputs(string context)
@@ -727,13 +753,17 @@ namespace inspector
             return !hadError;
         }
 
+
+        /// <summary>
+        /// Subscribe() spawns a job to subscribe to the topic selected in the SubscribeTopic combobox in the Subscribe tab
+        /// </summary>
         public async void Subscribe()
         {
             if (ValidateSubscribeInputs("subscribe"))
             {
                 try
                 {
-                    BeginTask("Subscribing to MQTT topic");
+                    BeginJob("Subscribing to MQTT topic");
 
                     // NOTE: MQTT.net enum definition is compatible with straight integers so cast is OK
                     // AtMostOnce = 0x00,
@@ -747,11 +777,7 @@ namespace inspector
                             .Build();
 
                     var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
-
-                    //foreach (var item in response.Items)
-                    //{
-                    //    item.ResultCode;
-                    //}
+                    //TODO: error handling if something went from subscribing here
 
                     SubscribedTopics.Add(SubscribeTopic);
                     WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", INFO);
@@ -762,17 +788,20 @@ namespace inspector
                     WriteConsole($"Could not subscribe to {SubscribeTopic}", ERROR);
                 }
 
-                EndTask();
+                EndJob();
             }
         }
 
+        /// <summary>
+        /// Unsubscribe() spawns a job to unsubscribe from the topic selected in the SubscribeTopic combobox in the Subscribe tab
+        /// </summary>
         public async void Unsubscribe()
         {
             if (ValidateSubscribeInputs("unsubscribe"))
             {
                 try
                 {
-                    BeginTask("Unsubscribing from MQTT topic");
+                    BeginJob("Unsubscribing from MQTT topic");
 
                     var mqttUnsubscribeOptions = new MqttClientUnsubscribeOptionsBuilder()
                         .WithTopicFilter(SubscribeTopic)
@@ -790,20 +819,16 @@ namespace inspector
                     WriteConsole($"Could not unsubscribe from {SubscribeTopic}", ERROR);
                 }
 
-                EndTask();
+                EndJob();
             }
         }
 
 
-        // used for publishing parameters
-        private string _publishTopic = string.Empty;
-        private string _publishQoS = string.Empty;
-        private string _publishMessage = string.Empty;
 
-        private bool _retainFlag = false;
-        private bool _isPeriodic = false;
         private string _periodicRate = string.Empty;
-
+        /// <summary>
+        /// PeriodicRate stores the contents of the rate combobox associated with the IsPeriodic checkbox in the Publish tab
+        /// </summary>
         public string PeriodicRate
         {
             get
@@ -818,6 +843,13 @@ namespace inspector
             }
         }
 
+
+        private bool _isPeriodic = false;
+        /// <summary>
+        /// IsPeriodic stores the contents of the Periodic checkbox in the Publish tab
+        /// <br/>
+        /// <b>NOTE: setter forces an update of all the dynamic controls in the Publish tab</b>
+        /// </summary>
         public bool IsPeriodic
         {
             get
@@ -832,6 +864,12 @@ namespace inspector
             }
         }
 
+        
+
+        private bool _retainFlag = false;
+        /// <summary>
+        /// RetainFlag stores the contents of the Retain checkbox in the Publish tab
+        /// </summary>
         public bool RetainFlag
         {
             get
@@ -846,6 +884,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _publishMessage = string.Empty;
+        /// <summary>
+        /// PublishMessage stores the contents of the message/payload field in the Publish tab
+        /// </summary>
         public string PublishMessage
         {
             get
@@ -860,6 +904,12 @@ namespace inspector
             }
         }
 
+
+
+        private string _publishQoS = string.Empty;
+        /// <summary>
+        /// PublishQoS stores the contents of the quality of service combobox in the Publish tab
+        /// </summary>
         public string PublishQoS
         {
             get
@@ -874,6 +924,8 @@ namespace inspector
                 OnPropertyChanged(nameof(PublishQoSInt));
             }
         }
+
+
 
         private int StringToQoS(string str)
         {
@@ -891,6 +943,10 @@ namespace inspector
             }
         }
 
+        private string _publishTopic = string.Empty;
+        /// <summary>
+        /// PublishTopic stores the contents of the topic combobox in the Publish tab
+        /// </summary>
         public string PublishTopic
         {
             get
@@ -934,7 +990,7 @@ namespace inspector
             }
         }
 
-        public bool IsEditable
+        public bool IsNotConnected
         {
             get
             {
@@ -1020,7 +1076,7 @@ namespace inspector
 
             try
             {
-                BeginTask("Publishing MQTT Topic");
+                BeginJob("Publishing MQTT Topic");
 
                 switch (PublishFormat)
                 {
@@ -1079,7 +1135,7 @@ namespace inspector
             }
 
             UpdatePublishTab();
-            EndTask();
+            EndJob();
         }
 
         public void UpdatePublishTab()
@@ -1091,7 +1147,7 @@ namespace inspector
             OnPropertyChanged(nameof(IsPausable));
             OnPropertyChanged(nameof(IsPaused));
             OnPropertyChanged(nameof(IsOnline));
-            OnPropertyChanged(nameof(IsEditable));
+            OnPropertyChanged(nameof(IsNotConnected));
             OnPropertyChanged(nameof(CanModifyAll));
         }
 

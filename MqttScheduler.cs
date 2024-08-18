@@ -127,7 +127,7 @@ public class MqttScheduler
         // NOTE: the Messaage constructor defaults to *not paused*
         _scheduledMessages[topic] = new ScheduledMessage(timer);
 
-        _viewmodel.WriteConsole($"Started transmitting {topic} every {intervalInMilliseconds} ms", ViewModel.INFO);
+        _viewmodel.WriteConsole($"Started transmitting {topic} every {intervalInMilliseconds} ms", LogLevel.Info);
     }
     
     public bool IsMessageScheduled(string topic)
@@ -152,7 +152,7 @@ public class MqttScheduler
     {
         if (_scheduledMessages.TryGetValue(topic, out var message))
         {
-            _viewmodel.WriteConsole($"Paused {topic}", ViewModel.INFO);
+            _viewmodel.WriteConsole($"Paused {topic}", LogLevel.Info);
             message._timer.Stop();
             message._paused = true;
             return true;
@@ -165,7 +165,7 @@ public class MqttScheduler
     {
         if (_scheduledMessages.TryGetValue(topic, out var message))
         {
-            _viewmodel.WriteConsole($"Resumed {topic}", ViewModel.INFO);
+            _viewmodel.WriteConsole($"Resumed {topic}", LogLevel.Info);
             message._timer.Start();
             message._paused = false;
             return true;
@@ -178,7 +178,7 @@ public class MqttScheduler
     {
         if (_scheduledMessages.TryRemove(topic, out var message))
         {
-            _viewmodel.WriteConsole($"Stopped transmitting {topic}", ViewModel.INFO);
+            _viewmodel.WriteConsole($"Stopped transmitting {topic}", LogLevel.Info);
             message._timer.Stop();
             message._timer.Dispose();
             return true;

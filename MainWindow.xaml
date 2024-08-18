@@ -26,6 +26,8 @@
             <local:NotificationTooltipConverter x:Key="NotificationTooltipConverter"/>
             <local:SubscribeStatusConverter x:Key="SubscribeStatusConverter"/>
             <local:PauseResumeButtonConverter x:Key="PauseResumeButtonConverter"/>
+            <local:PauseAllTextConverter x:Key="PauseAllTextConverter"/>
+            <local:QualityOfServiceConverter x:Key="QualityOfServiceConverter"/>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -222,11 +224,8 @@
                                     Grid.Column="1"
                                     IsEnabled="{Binding IsSubscribeQoSEditable}">
                             <Label Content="Quality of Service"/>
-                            <ComboBox Text="{Binding SubscribeQoS}">
-                                <ComboBoxItem>0 (At most once)</ComboBoxItem>
-                                <ComboBoxItem>1 (At least once)</ComboBoxItem>
-                                <ComboBoxItem>2 (Exactly once)</ComboBoxItem>
-                            </ComboBox>
+                            <ComboBox SelectedItem="{Binding SubscribeQoS, Converter={StaticResource QualityOfServiceConverter}}"
+                                      ItemsSource="{Binding QoSOptions}"/>
                         </StackPanel>
                     </Grid>
 
@@ -310,11 +309,8 @@
                         <StackPanel Margin="5" 
                                     Grid.Column="1">
                             <Label Content="Quality of Service"/>
-                            <ComboBox Text="{Binding PublishQoS}">
-                                <ComboBoxItem>0 (At most once)</ComboBoxItem>
-                                <ComboBoxItem>1 (At least once)</ComboBoxItem>
-                                <ComboBoxItem>2 (Exactly once)</ComboBoxItem>
-                            </ComboBox>
+                            <ComboBox SelectedItem="{Binding PublishQoS, Converter={StaticResource QualityOfServiceConverter}}"
+                                      ItemsSource="{Binding QoSOptions}"/>
                         </StackPanel>
                     </Grid>
 
@@ -442,9 +438,8 @@
                         </Grid.ColumnDefinitions>
 
                         <Button Grid.Column="0"
-                                Content="{Binding PauseAllStatus}"
+                                Content="{Binding AreAllPaused, Converter={StaticResource PauseAllTextConverter}}"
                                 Click="PauseAllButton_Clicked"
-                                Name="PauseAllButton"
                                 Margin="0, 0, 5, 0"/>
 
                         <Button Grid.Column="1"
@@ -532,7 +527,7 @@
             <Label Grid.Row="0">Console</Label>
 
             <ListView Grid.Row="1"
-                      ItemsSource="{Binding ConsoleOutput}"
+                      ItemsSource="{Binding ConsoleData}"
                       Name="consoleOutput"
                       BorderBrush="{Binding ShowNotification, Converter={StaticResource NotificationBrushConverter}}"
                       BorderThickness="2"
@@ -569,9 +564,8 @@
                 <Separator/>
             </StatusBarItem>
 
-            <StatusBarItem>
-                <StackPanel Orientation="Horizontal"
-                            ToolTip="{Binding ProgressText}">
+            <StatusBarItem ToolTip="{Binding JobProgressText}">
+                <StackPanel Orientation="Horizontal">
                     <iconPacks:PackIconEntypo Width="16" 
                           Height="16" 
                           Kind="Message"/>
@@ -583,7 +577,6 @@
                     <ProgressBar Width="100" 
                                  Height="10" 
                                  Style="{x:Null}"
-                                 ToolTip="{Binding ProgressText}"
                                  IsIndeterminate="{Binding ShowProgress}"
                                  Visibility="Visible"
                                  Margin="5, 0, 0, 0"/>

@@ -25,7 +25,7 @@ namespace inspector
             Dark.Net.DarkNet.Instance.SetWindowThemeWpf(this, Dark.Net.Theme.Auto);
 
             this.DataContext = new ViewModel();
-            _viewmodel.ConsoleOutput.CollectionChanged += ConsoleOutput_CollectionChanged;
+            _viewmodel.ConsoleData.CollectionChanged += ConsoleOutput_CollectionChanged;
             //_viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_CollectionChanged;
         }
 

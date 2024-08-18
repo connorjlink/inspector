@@ -16,19 +16,67 @@ using System.Security.RightsManagement;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Timers;
+using Microsoft.VisualBasic.Devices;
 
 namespace inspector
 {
     public class ViewModel : INotifyPropertyChanged
     {
         private const string NO_BROKER_CONNECTION = "Not connected to a broker";
+        
+        // number of seconds over which we average message txfer rates
+        private const int HISTORY_LENGTH = 2;
 
-        public void WriteConsoleImpl(string message, LogLevel loglevel, ViewModel viewmodel)
+        // Quality of service options for the dropdown
+        private ObservableCollection<string> QoS_OPTIONS = ["0 (At most once)", "1 (At least once)", "2 (Exactly once)"];
+
+
+        private static MqttFactory _mqttFactory;
+        public static MQTTnet.Client.MqttClient _mqttClient;
+
+        private static MqttScheduler _mqttScheduler;
+
+
+        // for computing message throughput in the statusbar
+        private Queue<int> _sendingPerSecondQueue = new();
+        private Queue<int> _receivingPerSecondQueue = new();
+        // yet more tracking to compute send/recieve rate
+        private int _lastSentCount = 0;
+        // TODO: make not public (currently the scheduler needs to increment this)
+        // will have abstract away some of that functionality
+        public int _currentSentCount = 0;
+
+        private int _lastReceivedCount = 0;
+        private int _currentReceivedCount = 0;
+
+
+        public ViewModel()
+        {
+            _mqttFactory = new MqttFactory();
+            _mqttClient = (MQTTnet.Client.MqttClient)_mqttFactory.CreateMqttClient();
+
+            _mqttScheduler = new MqttScheduler(this);
+
+            var timer = new System.Timers.Timer(1000);
+            timer.Elapsed += ComputeMessagesPerSecond;
+            timer.AutoReset = true;
+            timer.Start();
+
+            // 
+            SubscribedTopics.CollectionChanged += (s, ea) =>
+            {
+                OnPropertyChanged(nameof(IsSubscribedToCurrent));
+                OnPropertyChanged(nameof(IsSubscribeQoSEditable));
+            };
+        }
+
+
+        public void WriteConsole(string message, LogLevel loglevel)
         {
             if (loglevel == LogLevel.Error)
             {
-                viewmodel.ShowNotification = true;
-                viewmodel.NotificationCount++;
+                ShowNotification = true;
+                NotificationCount++;
             }
 
             var level = loglevel switch
@@ -38,113 +86,13 @@ namespace inspector
                 LogLevel.Error => "ERROR",
                 _ => throw new NotImplementedException(),
             };
-            viewmodel.ConsoleData.Add($"{Timestamp()} {level}: {message}");
+
+            var formattedTimestamp = $"[{Timestamp()}]";
+            ConsoleData.Add($"{formattedTimestamp} {level}: {message}");
         }
 
-        private Queue<int> _sendingPerSecondQueue = new();
-        private Queue<int> _receivingPerSecondQueue = new();
 
-        public string SendingPerSecond
-        {
-            get
-            {
-                if (Connected)
-                {
-                    if (_sendingPerSecondQueue.Count > 0)
-                    {
-                        return $"{_sendingPerSecondQueue.Average()}/s";
-                    }
-
-                    return "0/s";
-                }
-
-                return "N/A";
-            }
-        }
-
-        public string ReceivingPerSecond
-        {
-            get
-            {
-                if (Connected)
-                {
-                    if (_receivingPerSecondQueue.Count > 0)
-                    {
-                        return $"{_receivingPerSecondQueue.Average()}/s";
-                    }
-
-                    return "0/s";
-                }
-
-                return "N/A";
-            }
-        }
-
-        private int _lastSentCount = 0;
-        public int _currentSentCount = 0;
-
-        private int _lastReceivedCount = 0;
-        private int _currentReceivedCount = 0;
-
-        // number of seconds over which we average message txfer rates
-        private const int HISTORY_LENGTH = 2;
-
-        private void ComputeSendingPerSecond()
-        {
-            var diff = _currentSentCount - _lastSentCount;
-            _lastSentCount = _currentSentCount;
-
-            _sendingPerSecondQueue.Enqueue(diff);
-
-            if (_sendingPerSecondQueue.Count > HISTORY_LENGTH)
-            {
-                _sendingPerSecondQueue.Dequeue();
-            }
-
-            OnPropertyChanged(nameof(SendingPerSecond));
-        }
-
-        
-
-        public string ConnectionToolTip
-        {
-            get
-            {
-                if (Connected)
-                {
-                    var state = EnableTLS ? "enabled" : "disabled";
-                    return $"TLS encryption is {state}";
-                }
-
-                return NO_BROKER_CONNECTION;
-            }
-        }
-
-        bool _areAllPaused = false;
-
-        public string PauseAllStatus
-        {
-            get
-            {
-                return AreAllPaused ? "Resume All" : "Pause All";
-            }
-        }
-
-        public bool AreAllPaused
-        {
-            get
-            {
-                return _areAllPaused;
-            }
-
-            set
-            {
-                _areAllPaused = value;
-                OnPropertyChanged(nameof(AreAllPaused));
-                OnPropertyChanged(nameof(PauseAllStatus));
-            }
-        }
-
+        // TODO: abstract this stuff below away (since Viewmodel is not responsible for `business logic`)
         public void PauseAll()
         {
             _mqttScheduler.PauseAll();
@@ -164,16 +112,120 @@ namespace inspector
             _mqttScheduler.KillAll();
             UpdatePublishTab();
         }
+        // refactor above
 
-        // determines whether the user can pause/resume/kill all periodic messages
-        public bool CanModifyAll
+
+        // TODO: refactor to abstract away this functionality into another class
+        // also support multiple tasks (i.e., nesting)!
+        private void BeginJob(string message)
         {
-            get
+            ProgressText = message;
+            ShowProgress = true;
+        }
+
+        private void EndJob()
+        {
+            ShowProgress = false;
+        }
+        //refactor above
+
+
+
+
+
+        private string FormatRate(Queue<int> queue)
+        {
+            if (Connected)
             {
-                return _mqttScheduler.TotalMessageCount() > 0;
+                if (_sendingPerSecondQueue.Count > 0)
+                {
+                    return $"{_sendingPerSecondQueue.Average()}/s";
+                }
+
+                return "0/s";
+            }
+
+            return "N/A";
+        }
+
+
+        private void ComputeMessagesPerSecondImpl(ref int lastCount, ref int currentCount, Queue<int> queue)
+        {
+            var diff = currentCount - lastCount;
+            lastCount = currentCount;
+
+            queue.Enqueue(diff);
+
+            if (queue.Count > HISTORY_LENGTH)
+            {
+                queue.Dequeue();
             }
         }
 
+        private void ComputeMessagesPerSecond(Object source, ElapsedEventArgs e)
+        {
+            ComputeMessagesPerSecondImpl(ref _lastSentCount, ref _currentSentCount, _sendingPerSecondQueue);
+            ComputeMessagesPerSecondImpl(ref _lastReceivedCount, ref _currentReceivedCount, _receivingPerSecondQueue);
+
+            OnPropertyChanged(nameof(ReceivingPerSecond));
+            OnPropertyChanged(nameof(SendingPerSecond));
+
+            OnPropertyChanged(nameof(UploadDownloadToolTip));
+        }
+
+
+
+
+        /// <summary>
+        /// SendingPerSecond stores a formatted string representing the average sent messages per second
+        /// <br/>
+        /// <b>SEE ALSO: `HISTORY_LENGTH` for information about time duration for averaging</b>
+        /// </summary>
+        public string SendingPerSecond
+        {
+            get
+            {
+                return FormatRate(_sendingPerSecondQueue);
+            }
+        }
+
+
+        /// <summary>
+        /// ReceivingPerSecond stores a formatted string representing the average received messages per second
+        /// <br/>
+        /// <b>SEE ALSO: `HISTORY_LENGTH` for information about time duration for averaging</b>
+        /// </summary>
+        public string ReceivingPerSecond
+        {
+            get
+            {
+                return FormatRate(_receivingPerSecondQueue);
+            }
+        }
+
+
+
+        /// <summary>
+        /// ConnectionToolTip stores the formatted hover text for the Connection indicator in the statusbar
+        /// </summary>
+        public string ConnectionToolTip
+        {
+            get
+            {
+                if (Connected)
+                {
+                    var state = EnableTLS ? "enabled" : "disabled";
+                    return $"TLS encryption is {state}";
+                }
+
+                return NO_BROKER_CONNECTION;
+            }
+        }
+
+
+        /// <summary>
+        /// UploadDownloadToolTip stores the formatted hover text for the Sent/Received indicator in the statusbar
+        /// </summary>
         public string UploadDownloadToolTip
         {
             get
@@ -188,49 +240,47 @@ namespace inspector
             }
         }
 
-        private void ComputeRecievingPerSecond()
+
+        
+
+
+        bool _areAllPaused = false;
+        /// <summary>
+        /// AreAllPaused stores the global paused/running state for the Pause All/Resume All button in the Publish tab
+        /// </summary>
+        public bool AreAllPaused
         {
-            var diff = _currentReceivedCount - _lastReceivedCount;
-            _lastReceivedCount = _currentReceivedCount;
-
-            _receivingPerSecondQueue.Enqueue(diff);
-
-            if (_receivingPerSecondQueue.Count > HISTORY_LENGTH)
+            get
             {
-                _receivingPerSecondQueue.Dequeue();
+                return _areAllPaused;
             }
 
-            OnPropertyChanged(nameof(ReceivingPerSecond));
+            set
+            {
+                _areAllPaused = value;
+                OnPropertyChanged(nameof(AreAllPaused));
+            }
         }
 
-        private void ComputeMessagesPerSecond(Object source, ElapsedEventArgs e)
+        
+
+        // determines whether the user can pause/resume/kill all periodic messages
+        public bool CanModifyAll
         {
-            ComputeRecievingPerSecond();
-            ComputeSendingPerSecond();
-            OnPropertyChanged(nameof(UploadDownloadToolTip));
+            get
+            {
+                return _mqttScheduler.TotalMessageCount() > 0;
+            }
         }
 
-        public void WriteConsole(string message, string level)
-        {
-            WriteConsoleImpl(message, level, this);
-        }
+        
 
-        // TODO: support multiple tasks (i.e., nesting)
-        private void BeginJob(string message)
-        {
-            ProgressText = message;
-            ShowProgress = true;
-        }
+        
 
-        private void EndJob()
-        {
-            ShowProgress = false;
-        }
-
-        // notifcation summary for the console
         private bool _showNotification = false;
-        private int _notificationCount = 0;
-
+        /// <summary>
+        /// ShowNotification stores whether or not an error notification should be displayed in the titlebar and console window
+        /// </summary>
         public bool ShowNotification
         {
             get
@@ -245,6 +295,11 @@ namespace inspector
             }
         }
 
+
+        private int _notificationCount = 0;
+        /// <summary>
+        /// NotificationCount stores the total number of unread error notifications for use in the hover tooltip
+        /// </summary>
         public int NotificationCount
         {
             get
@@ -259,34 +314,38 @@ namespace inspector
             }
         }
 
+
+
+        // TODO: refactor these names to be a bit more descriptive
         // progress bar for status bar
-        private bool _showProgress = false;
-        private string _progressText = string.Empty;
+        private bool _jobInProgress = false;
 
         public bool ShowProgress
         {
             get
             {
-                return _showProgress;
+                return _jobInProgress;
             }
 
             set
             {
-                _showProgress = value;
+                _jobInProgress = value;
                 OnPropertyChanged(nameof(ShowProgress));
             }
         }
+
+        private string _jobProgressText = string.Empty;
 
         public string ProgressText
         {
             get
             {
-                return _showProgress ? _progressText : "No tasks in progress";
+                return _jobInProgress ? _jobProgressText : "No tasks in progress";
             }
 
             set
             {
-                _progressText = value;
+                _jobProgressText = value;
                 OnPropertyChanged(nameof(ProgressText));
             }
         }
@@ -310,14 +369,6 @@ namespace inspector
         // used for topic subscribe/unsubscribe
         private ObservableCollection<string> _subscribedTopics = new();
         private string _subscribeTopic = string.Empty;
-
-        private int SubscribeQoSInt
-        {
-            get
-            {
-                return StringToQoS(SubscribeQoS);
-            }
-        }
 
         public ObservableCollection<string> SubscribedTopics
         {
@@ -344,11 +395,11 @@ namespace inspector
         }
 
 
-        private string _subscribeQoS = string.Empty;
+        private MqttQualityOfServiceLevel _subscribeQoS = 0;
         /// <summary>
         /// SubscribeQoS stores the contents of the quality of service combobox in the Subscribe tab
         /// </summary>
-        public string SubscribeQoS
+        public MqttQualityOfServiceLevel SubscribeQoS
         {
             get
             {
@@ -359,7 +410,6 @@ namespace inspector
             {
                 _subscribeQoS = value;
                 OnPropertyChanged(nameof(SubscribeQoS));
-                OnPropertyChanged(nameof(SubscribeQoSInt));
             }
         }
 
@@ -545,6 +595,16 @@ namespace inspector
 
 
 
+        public ObservableCollection<string> QoSOptions
+        {
+            get
+            {
+                return QoS_OPTIONS;
+            }
+        }
+
+
+
         private ObservableCollection<string> _consoleData = new();
         /// <summary>
         /// ConsoleData is the item source for the listview in the Console window
@@ -585,34 +645,11 @@ namespace inspector
         }
 
 
-        private static MqttFactory _mqttFactory;
-        public static MQTTnet.Client.MqttClient _mqttClient;
-
-        private static MqttScheduler _mqttScheduler;
-
-        public ViewModel()
-        {
-            _mqttFactory = new MqttFactory();
-            _mqttClient = (MQTTnet.Client.MqttClient)_mqttFactory.CreateMqttClient();
-
-            _mqttScheduler = new MqttScheduler(this);
-
-            var timer = new System.Timers.Timer(1000);
-            timer.Elapsed += ComputeMessagesPerSecond;
-            timer.AutoReset = true;
-            timer.Start();
-
-            // 
-            SubscribedTopics.CollectionChanged += (s, ea) =>
-            {
-                OnPropertyChanged(nameof(IsSubscribedToCurrent));
-                OnPropertyChanged(nameof(IsSubscribeQoSEditable));
-            };
-        }
+        
 
         private void HandleMissing(string whatsMissing, string context, ref bool hadError)
         {
-            WriteConsole($"Specify a {whatsMissing} to {context}", ERROR);
+            WriteConsole($"Specify a {whatsMissing} to {context}", LogLevel.Error);
             hadError = true;
         }
 
@@ -652,7 +689,7 @@ namespace inspector
 
                         var response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
                         Connected = true;
-                        WriteConsole($"Connected to {IP}:{Port} (Result Code: {response.ResultCode})", INFO);
+                        WriteConsole($"Connected to {IP}:{Port} (Result Code: {response.ResultCode})", LogLevel.Info);
 
                         var concurrent = new SemaphoreSlim(Environment.ProcessorCount);
 
@@ -666,7 +703,7 @@ namespace inspector
                             {
                                 try
                                 {
-                                    float timestamp = TimestampImpl();
+                                    float timestamp = Timestamp();
                                     string topic = ea.ApplicationMessage.Topic;
                                     string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
                                     int qos = (int)ea.ApplicationMessage.QualityOfServiceLevel;
@@ -704,7 +741,7 @@ namespace inspector
                 {
                     // TODO: display more meaningful error message here if not connected
                     // (Result Code: {response.ResultCode})
-                    WriteConsole($"Could not connect to {IP}:{Port}", ERROR);
+                    WriteConsole($"Could not connect to {IP}:{Port}", LogLevel.Error);
                 }
 
                 EndJob();
@@ -712,7 +749,7 @@ namespace inspector
 
             else
             {
-                WriteConsole("TLS connections are currently unsupported", ERROR);
+                WriteConsole("TLS connections are currently unsupported", LogLevel.Error);
             }
         }
 
@@ -724,14 +761,14 @@ namespace inspector
 
                 await _mqttClient.DisconnectAsync();
                 Connected = false;
-                WriteConsole($"Disconnected from {IP}:{Port}", INFO);
+                WriteConsole($"Disconnected from {IP}:{Port}", LogLevel.Info);
 
                 SubscribedTopics.Clear();
             }
 
             catch
             {
-                WriteConsole($"Could not disconnect from {IP}:{Port}", ERROR);
+                WriteConsole($"Could not disconnect from {IP}:{Port}", LogLevel.Error);
             }
 
             EndJob();
@@ -747,7 +784,7 @@ namespace inspector
             bool hadError = false;
 
             if (SubscribeTopic == "") HandleMissing("subscription topic", context, ref hadError);
-            if (SubscribeQoS == "") HandleMissing("subscription QoS", context, ref hadError);
+            //if (SubscribeQoS == "") HandleMissing("subscription QoS", context, ref hadError);
 
             // inverting because we only validate if no errors occurred
             return !hadError;
@@ -773,19 +810,19 @@ namespace inspector
                     // TODO: add a checkbox to set NoLocal (we don't get our own messages)
 
                     var mqttSubscribeOptions = new MqttClientSubscribeOptionsBuilder()
-                        .WithTopicFilter(SubscribeTopic, (MqttQualityOfServiceLevel)SubscribeQoSInt, false)
+                        .WithTopicFilter(SubscribeTopic, SubscribeQoS, false)
                             .Build();
 
                     var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
                     //TODO: error handling if something went from subscribing here
 
                     SubscribedTopics.Add(SubscribeTopic);
-                    WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", INFO);
+                    WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", LogLevel.Info);
                 }
 
                 catch
                 {
-                    WriteConsole($"Could not subscribe to {SubscribeTopic}", ERROR);
+                    WriteConsole($"Could not subscribe to {SubscribeTopic}", LogLevel.Error);
                 }
 
                 EndJob();
@@ -811,12 +848,12 @@ namespace inspector
                     //TODO: error handling if something went from unsubscribing here
 
                     SubscribedTopics.Remove(SubscribeTopic);
-                    WriteConsole($"Unsubscribed from {SubscribeTopic}", INFO);
+                    WriteConsole($"Unsubscribed from {SubscribeTopic}", LogLevel.Info);
                 }
 
                 catch
                 {
-                    WriteConsole($"Could not unsubscribe from {SubscribeTopic}", ERROR);
+                    WriteConsole($"Could not unsubscribe from {SubscribeTopic}", LogLevel.Error);
                 }
 
                 EndJob();
@@ -906,11 +943,11 @@ namespace inspector
 
 
 
-        private string _publishQoS = string.Empty;
+        private MqttQualityOfServiceLevel _publishQoS = 0;
         /// <summary>
         /// PublishQoS stores the contents of the quality of service combobox in the Publish tab
         /// </summary>
-        public string PublishQoS
+        public MqttQualityOfServiceLevel PublishQoS
         {
             get
             {
@@ -921,27 +958,10 @@ namespace inspector
             {
                 _publishQoS = value;
                 OnPropertyChanged(nameof(PublishQoS));
-                OnPropertyChanged(nameof(PublishQoSInt));
             }
         }
 
 
-
-        private int StringToQoS(string str)
-        {
-            // NOTE: for all the listed options, the QoS integer is the first character
-            char value = str[0];
-            // ASCII hackery ;)
-            return value - '0';
-        }
-
-        public int PublishQoSInt
-        {
-            get
-            {
-                return StringToQoS(PublishQoS);
-            }
-        }
 
         private string _publishTopic = string.Empty;
         /// <summary>
@@ -960,6 +980,7 @@ namespace inspector
                 UpdatePublishTab();
             }
         }
+
 
         public bool IsTransmitting
         {
@@ -1042,7 +1063,7 @@ namespace inspector
                 return;
             }
 
-            WriteConsole($"Could not pause {PublishTopic}", ERROR);
+            WriteConsole($"Could not pause {PublishTopic}", LogLevel.Error);
         }
 
         public void Resume()
@@ -1053,7 +1074,7 @@ namespace inspector
                 return;
             }
 
-            WriteConsole($"Could not resume {PublishTopic}", ERROR);
+            WriteConsole($"Could not resume {PublishTopic}", LogLevel.Error);
         }
 
         public async void Publish()
@@ -1063,7 +1084,7 @@ namespace inspector
             const string context = "publish";
 
             if (PublishTopic == "") HandleMissing("topic", context, ref hadError);
-            if (PublishQoS == "") HandleMissing("quality of service", context, ref hadError);
+            //if (PublishQoS == "") HandleMissing("quality of service", context, ref hadError);
             if (IsPeriodic)
             {
                 if (PeriodicRate == "") HandleMissing("periodic interval", context, ref hadError);
@@ -1088,15 +1109,15 @@ namespace inspector
                                     .WithTopic(PublishTopic)
                                         .WithPayload(PublishMessage)
                                             .WithRetainFlag(RetainFlag)
-                                                .WithQualityOfServiceLevel((MqttQualityOfServiceLevel)PublishQoSInt)
+                                                .WithQualityOfServiceLevel(PublishQoS)
                                                     .Build();
 
-                                //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag);
+                                //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, PublishQoS, RetainFlag);
 
                                 var response = await _mqttClient.PublishAsync(applicationMessage);
                                 _currentSentCount++;
                                 var retain = RetainFlag ? "with" : "without";
-                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", INFO);
+                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", LogLevel.Info);
                             }
 
                             else
@@ -1104,7 +1125,7 @@ namespace inspector
                                 // TODO: add support for other publish formats (binary, protobuf) here!
                                 if (!IsTransmitting)
                                 {
-                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag, int.Parse(PeriodicRate));
+                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, RetainFlag, int.Parse(PeriodicRate));
                                 }
 
                                 else
@@ -1131,7 +1152,7 @@ namespace inspector
 
             catch
             {
-                WriteConsole($"Could not publish {PublishTopic}", ERROR);
+                WriteConsole($"Could not publish {PublishTopic}", LogLevel.Error);
             }
 
             UpdatePublishTab();
@@ -1186,15 +1207,9 @@ namespace inspector
             }
         }
 
-        private float TimestampImpl()
+        private float Timestamp()
         {
             return Runtime.CurrentRuntime / 1000.0f;
-        }
-
-        private string Timestamp()
-        {
-            // ms -> s
-            return $"[{TimestampImpl()}]";
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

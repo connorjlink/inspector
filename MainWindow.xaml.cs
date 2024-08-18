@@ -41,6 +41,24 @@ namespace inspector
             allMessagesData.ScrollIntoView(allMessagesData.Items[allMessagesData.Items.Count - 1]);
         }
 
+        private void PauseAllButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            if (_viewmodel.AreAllPaused)
+            {
+                _viewmodel.ResumeAll();
+            }
+            
+            else
+            {
+                _viewmodel.PauseAll();
+            }
+        }
+
+        private void KillAllButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            _viewmodel.KillAll();
+        }
+
         private void PauseButton_Clicked(object sender, RoutedEventArgs e)
         {
             if (_viewmodel.IsPaused)

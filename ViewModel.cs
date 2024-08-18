@@ -67,24 +67,173 @@ namespace inspector
             viewmodel.ConsoleOutput.Add($"{Timestamp()} {level}: {message}");
         }
 
-        private Queue<int> _computeQueue = new();
+        private Queue<int> _sendingPerSecondQueue = new();
+        private Queue<int> _receivingPerSecondQueue = new();
+
+        public string SendingPerSecond
+        {
+            get
+            {
+                if (Connected)
+                {
+                    if (_sendingPerSecondQueue.Count > 0)
+                    {
+                        return $"{_sendingPerSecondQueue.Average()}/s";
+                    }
+
+                    return "0/s";
+                }
+
+                return "N/A";
+            }
+        }
+
+        public string ReceivingPerSecond
+        {
+            get
+            {
+                if (Connected)
+                {
+                    if (_receivingPerSecondQueue.Count > 0)
+                    {
+                        return $"{_receivingPerSecondQueue.Average()}/s";
+                    }
+
+                    return "0/s";
+                }
+
+                return "N/A";
+            }
+        }
+
+        private int _lastSentCount = 0;
+        public int _currentSentCount = 0;
+
+        private int _lastReceivedCount = 0;
+        private int _currentReceivedCount = 0;
+
+        // number of seconds over which we average message txfer rates
+        private const int HISTORY_LENGTH = 2;
+
+        private void ComputeSendingPerSecond()
+        {
+            var diff = _currentSentCount - _lastSentCount;
+            _lastSentCount = _currentSentCount;
+
+            _sendingPerSecondQueue.Enqueue(diff);
+
+            if (_sendingPerSecondQueue.Count > HISTORY_LENGTH)
+            {
+                _sendingPerSecondQueue.Dequeue();
+            }
+
+            OnPropertyChanged(nameof(SendingPerSecond));
+        }
+
+        private const string NO_BROKER_CONNECTION = "Not connected to a broker";
+
+        public string ConnectionToolTip
+        {
+            get
+            {
+                if (Connected)
+                {
+                    var state = EnableTLS ? "enabled" : "disabled";
+                    return $"TLS encryption is {state}";
+                }
+
+                return NO_BROKER_CONNECTION;
+            }
+        }
+
+        bool _areAllPaused = false;
+
+        public string PauseAllStatus
+        {
+            get
+            {
+                return AreAllPaused ? "Resume All" : "Pause All";
+            }
+        }
+
+        public bool AreAllPaused
+        {
+            get
+            {
+                return _areAllPaused;
+            }
+
+            set
+            {
+                _areAllPaused = value;
+                OnPropertyChanged(nameof(AreAllPaused));
+                OnPropertyChanged(nameof(PauseAllStatus));
+            }
+        }
+
+        public void PauseAll()
+        {
+            _mqttScheduler.PauseAll();
+            AreAllPaused = true;
+            UpdatePublishTab();
+        }
+
+        public void ResumeAll()
+        {
+            _mqttScheduler.ResumeAll();
+            AreAllPaused = false;
+            UpdatePublishTab();
+        }
+
+        public void KillAll()
+        {
+            _mqttScheduler.KillAll();
+            UpdatePublishTab();
+        }
+
+        // determines whether the user can pause/resume/kill all periodic messages
+        public bool CanModifyAll
+        {
+            get
+            {
+                return _mqttScheduler.TotalMessageCount() > 0;
+            }
+        }
+
+        public string UploadDownloadToolTip
+        {
+            get
+            {
+                if (Connected)
+                {
+                    return $"Sending {_sendingPerSecondQueue.Average()} messages/second over {_mqttScheduler.ScheduledMessageCount()} topics\n" +
+                        $"Receiving {_receivingPerSecondQueue.Average()} messages/second";
+                }
+
+                return NO_BROKER_CONNECTION;
+            }
+        }
+
+        private void ComputeRecievingPerSecond()
+        {
+            var diff = _currentReceivedCount - _lastReceivedCount;
+            _lastReceivedCount = _currentReceivedCount;
+
+            _receivingPerSecondQueue.Enqueue(diff);
+
+            if (_receivingPerSecondQueue.Count > HISTORY_LENGTH)
+            {
+                _receivingPerSecondQueue.Dequeue();
+            }
+
+            OnPropertyChanged(nameof(ReceivingPerSecond));
+        }
 
         private void ComputeMessagesPerSecond(Object source, ElapsedEventArgs e)
         {
-            var diff = _currentMessageCount - _lastMessageCount;
-            _lastMessageCount = _currentMessageCount;
-
-            _computeQueue.Enqueue(diff);
-
-            // store the last three seconds of history
-            if (_computeQueue.Count() == 3)
-            {
-                _computeQueue.Dequeue();
-            }
-
-            _messagesPerSecond = (float)_computeQueue.Average();
-
-            OnPropertyChanged(nameof(ReceivingStatusExtended));
+            ComputeRecievingPerSecond();
+            ComputeSendingPerSecond();
+            OnPropertyChanged(nameof(UploadDownloadToolTip));
         }
 
         public void WriteConsole(string message, string level)
@@ -275,7 +424,13 @@ namespace inspector
             {
                 _connected = value;
                 OnPropertyChanged(nameof(Connected));
+                OnPropertyChanged(nameof(Editable));
                 OnPropertyChanged(nameof(ConnectionStatusExtended));
+                OnPropertyChanged(nameof(ConnectionToolTip));
+                OnPropertyChanged(nameof(SendingPerSecond));
+                OnPropertyChanged(nameof(ReceivingPerSecond));
+                OnPropertyChanged(nameof(UploadDownloadToolTip));
+                OnPropertyChanged(nameof(CanModifyAll));
             }
         }
 
@@ -318,6 +473,7 @@ namespace inspector
             {
                 _enableTLS = value;
                 OnPropertyChanged(nameof(EnableTLS));
+                OnPropertyChanged(nameof(ConnectionToolTip));
             }
         }
 
@@ -381,6 +537,22 @@ namespace inspector
             }
         }
 
+        public class PublishMessageData
+        {
+            public string Topic;
+            public string Status;
+        }
+
+        private ObservableCollection<PublishMessageData> _publishMessagesData = new();
+
+        public ObservableCollection<PublishMessageData> PublishMessagesData
+        {
+            get
+            {
+                return _publishMessagesData;
+            }
+        }
+
 
         private static MqttFactory _mqttFactory;
         public static MQTTnet.Client.MqttClient _mqttClient;
@@ -407,20 +579,6 @@ namespace inspector
         {
             WriteConsole($"Specify a {whatsMissing} to {context}", ERROR);
             hadError = true;
-        }
-
-
-        private int _lastMessageCount = 0;
-        private int _currentMessageCount = 0;
-
-        private float _messagesPerSecond;
-
-        public string ReceivingStatusExtended
-        {
-            get
-            {
-                return $"Receiving {_messagesPerSecond} per second...";
-            }
         }
 
         public async void Connect()
@@ -481,7 +639,7 @@ namespace inspector
 
                                     Application.Current.Dispatcher.Invoke(() =>
                                     {
-                                        _currentMessageCount += 1;
+                                        _currentReceivedCount++;
                                         // For example, update a TextBox or ListBox
                                         // myTextBox.Text = payload;
                                         //WriteConsole($"Received topic: {topic}", INFO);
@@ -764,7 +922,7 @@ namespace inspector
         {
             get
             {
-                return IsPeriodic && IsTransmitting;
+                return IsPeriodic && IsTransmitting && !AreAllPaused;
             }
         }
 
@@ -772,7 +930,7 @@ namespace inspector
         {
             get
             {
-                return IsPeriodic && IsTransmitting && !IsPaused;
+                return IsPeriodic && IsTransmitting && !IsPaused && !AreAllPaused;
             }
         }
 
@@ -880,6 +1038,7 @@ namespace inspector
                                 //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, (MqttQualityOfServiceLevel)PublishQoSInt, RetainFlag);
 
                                 var response = await _mqttClient.PublishAsync(applicationMessage);
+                                _currentSentCount++;
                                 var retain = RetainFlag ? "with" : "without";
                                 WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", INFO);
                             }
@@ -933,6 +1092,7 @@ namespace inspector
             OnPropertyChanged(nameof(IsPaused));
             OnPropertyChanged(nameof(IsOnline));
             OnPropertyChanged(nameof(IsEditable));
+            OnPropertyChanged(nameof(CanModifyAll));
         }
 
         public string PublishStatus

@@ -40,6 +40,61 @@ public class MqttScheduler
         _viewmodel = viewmodel;
     }
 
+    public int TotalMessageCount()
+    {
+        // NOTE: here we just want the total number of periodic messages (paused or not) so using the `Count` property is OK
+        return _scheduledMessages.Count;
+    }
+
+    public int ScheduledMessageCount()
+    {
+        // NOTE: we can't use the `Count` property here because some messages might be paused
+
+        var count = 0;
+
+        foreach (var message in _scheduledMessages.Values)
+        {
+            if (!message._paused)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public void PauseAll()
+    {
+        foreach (var message in _scheduledMessages.Values)
+        {
+            message._timer.Stop();
+            // NOTE: not updating the pause value so that we only resume the correct ones later on
+            //message._paused = true;
+        }
+    }
+
+    public void ResumeAll()
+    {
+        foreach (var message in _scheduledMessages.Values)
+        {
+            if (!message._paused)
+            {
+                message._timer.Start();
+            }
+        }
+    }
+
+    public void KillAll()
+    {
+        // TODO: is stopping all of the timers first even necessary?
+        foreach (var message in _scheduledMessages.Values)
+        {
+            message._timer.Stop();
+        }
+
+        _scheduledMessages.Clear();
+    }
+
     public async Task PublishAsync(string topic, string payload, MqttQualityOfServiceLevel qos, bool retain)
     {
         var message = new MqttApplicationMessageBuilder()
@@ -48,6 +103,8 @@ public class MqttScheduler
                     .WithQualityOfServiceLevel(qos)
                         .WithRetainFlag(retain)
                             .Build();
+
+        _viewmodel._currentSentCount++;
 
         await ViewModel._mqttClient.PublishAsync(message);
     }

@@ -245,7 +245,7 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <Label>Subscribed MQTT Topics:</Label>
+                        <Label>Subscribed Messages</Label>
                         <ListView Grid.Row="1"
                                   ItemsSource="{Binding SubscribedTopics}"
                                   Name="subscribedTopics"
@@ -265,6 +265,8 @@
                      Header="Publish">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -430,6 +432,55 @@
                             Content="{Binding PublishStatus}"
                             Click="PublishButton_Clicked"
                             IsEnabled="{Binding Connected}"/>
+
+                    <Grid Grid.Row="8"
+                          Margin="5"
+                          IsEnabled="{Binding CanModifyAll}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Content="{Binding PauseAllStatus}"
+                                Click="PauseAllButton_Clicked"
+                                Name="PauseAllButton"
+                                Margin="0, 0, 5, 0"/>
+
+                        <Button Grid.Column="1"
+                                Content="Kill All"
+                                Click="KillAllButton_Clicked"
+                                Margin="5, 0, 0, 0"/>
+                    </Grid>
+
+                    <Separator Grid.Row="9"
+                               Margin="5"/>
+
+                    <Grid Grid.Row="10"
+                          Margin="5">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        
+                        <Label Grid.Row="0"
+                               Content="Current Messages"/>
+
+                        <DataGrid Grid.Row="1"
+                                  DataContext="{Binding PublishMessagesData}"
+                                  ItemsSource="{Binding}"
+                                  AutoGenerateColumns="False"
+                                  BorderBrush="Gray"
+                                  BorderThickness="2"
+                                  IsReadOnly="True"
+                                  IsEnabled="{Binding CanModifyAll}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}"/>
+                            </DataGrid.Columns>
+
+                        </DataGrid>
+                    </Grid>
                 </Grid>
             </TabItem>
         </TabControl>
@@ -444,7 +495,14 @@
                     <DataGrid Name="allMessagesData"
                               DataContext="{Binding AllMessagesData}"
                               ItemsSource="{Binding}"
-                              AutoGenerateColumns="False">
+                              IsReadOnly="True"
+                              AutoGenerateColumns="False"
+                              BorderBrush="Gray"
+                              BorderThickness="2"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.IsDeferredScrollingEnabled="True">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}"/>
                             <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
@@ -471,7 +529,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Label Grid.Row="0">Input/Output Console:</Label>
+            <Label Grid.Row="0">Console</Label>
 
             <ListView Grid.Row="1"
                       ItemsSource="{Binding ConsoleOutput}"
@@ -503,39 +561,55 @@
                    Background="{DynamicResource MahApps.Brushes.Badged.Background}">
             
             <StatusBarItem>
-                <TextBlock Text="{Binding ConnectionStatusExtended}"/>
-            </StatusBarItem>
-
-            <Separator/>
-
-            <StatusBarItem>
-                <iconPacks:PackIconEntypo Width="16" 
-                                          Height="16" 
-                                          Kind="Message"
-                                          ToolTip="{Binding ProgressText}"/>
+                <TextBlock Text="{Binding ConnectionStatusExtended}"
+                           ToolTip="{Binding ConnectionToolTip}"/>
             </StatusBarItem>
 
             <StatusBarItem>
-                <ProgressBar IsIndeterminate="True" 
-                             Width="100" 
-                             Height="10" 
-                             Style="{x:Null}"
-                             ToolTip="{Binding ProgressText}"
-                             Visibility="{Binding ShowProgress, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <Separator/>
             </StatusBarItem>
 
-            <Separator/>
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal"
+                            ToolTip="{Binding ProgressText}">
+                    <iconPacks:PackIconEntypo Width="16" 
+                          Height="16" 
+                          Kind="Message"/>
 
+                    <!--<mah:MetroProgressBar Width="100"
+                                          IsIndeterminate="True">
+                    </mah:MetroProgressBar>-->
+                    
+                    <ProgressBar Width="100" 
+                                 Height="10" 
+                                 Style="{x:Null}"
+                                 ToolTip="{Binding ProgressText}"
+                                 IsIndeterminate="{Binding ShowProgress}"
+                                 Visibility="Visible"
+                                 Margin="5, 0, 0, 0"/>
+                </StackPanel>
+            </StatusBarItem>
+
+            <StatusBarItem>
+                <Separator/>
+            </StatusBarItem>
             
             <!-- TODO: also could do this as an up/down arrow setup like some download/upload speed things would show -->
             <StatusBarItem>
-                <TextBlock>Transmitting 4 messages...</TextBlock>
+                <StackPanel Orientation="Horizontal"
+                            ToolTip="{Binding UploadDownloadToolTip}">
+                    <iconPacks:PackIconEntypo Kind="Upload"/>
+                    <TextBlock Text="{Binding SendingPerSecond}"
+                               Margin="5, 0, 0, 0"/>
+                    <iconPacks:PackIconEntypo Kind="Download"
+                                              Margin="10, 0, 0, 0"/>
+                    <TextBlock Text="{Binding ReceivingPerSecond}"
+                               Margin="5, 0, 0, 0"/>
+                </StackPanel>
             </StatusBarItem>
 
-            <Separator/>
-
             <StatusBarItem>
-                <TextBlock Text="{Binding ReceivingStatusExtended}"/>
+                <Separator/>
             </StatusBarItem>
         </StatusBar>
 

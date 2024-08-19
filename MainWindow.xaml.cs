@@ -45,29 +45,13 @@ namespace inspector
 
         private void ConnectButton_Clicked(object sender, RoutedEventArgs e)
         {
-            if (_viewmodel.IsConnected)
-            {
-                _viewmodel.Disconnect();
-            }
-
-            else
-            {
-                _viewmodel.Connect();
-            }
+            _viewmodel.ConnectDisconnect();
         }
 
 
         private void SubscribeButton_Clicked(object sender, RoutedEventArgs e)
         {
-            if (_viewmodel.IsSubscribedToCurrent)
-            {
-                _viewmodel.Unsubscribe();
-            }
-
-            else
-            {
-                _viewmodel.Subscribe();
-            }
+            _viewmodel.SubscribeUnsubscribe();
         }
 
 
@@ -79,29 +63,13 @@ namespace inspector
 
         private void PauseButton_Clicked(object sender, RoutedEventArgs e)
         {
-            if (_viewmodel.IsCurrentTopicPaused)
-            {
-                _viewmodel.Resume();
-            }
-
-            else
-            {
-                _viewmodel.Pause();
-            }
+            _viewmodel.PauseResume();
         }
 
 
         private void PauseAllButton_Clicked(object sender, RoutedEventArgs e)
         {
-            if (_viewmodel.AreAllPaused)
-            {
-                _viewmodel.ResumeAll();
-            }
-
-            else
-            {
-                _viewmodel.PauseAll();
-            }
+            _viewmodel.PauseResumeAll();
         }
 
 
@@ -109,7 +77,6 @@ namespace inspector
         {
             _viewmodel.KillAll();
         }
-
 
 
         private void ExecuteCommandButton_Clicked(object sender, RoutedEventArgs e)
@@ -132,7 +99,7 @@ namespace inspector
         
         private void SilenceNotification(object sender, RoutedEventArgs e)
         {
-            _viewmodel.NotificationCount = 0;
+            _viewmodel.SilenceNotification();
         }
     }
 }

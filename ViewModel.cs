@@ -16,6 +16,7 @@ using System.Security.RightsManagement;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Timers;
+using System.Windows.Navigation;
 
 namespace inspector
 {
@@ -75,7 +76,7 @@ namespace inspector
             // 
             SubscribedMessagesData.CollectionChanged += (s, ea) =>
             {
-                OnPropertyChanged(nameof(IsSubscribedToCurrent));
+                OnPropertyChanged(nameof(IsCurrentTopicSubscribed));
                 OnPropertyChanged(nameof(IsSubscribeQoSEditable));
             };
         }
@@ -101,30 +102,6 @@ namespace inspector
         }
 
 
-        
-
-
-        
-
-
-
-        public void ClearData()
-        {
-            AllMessagesData.Clear();
-            LiveMessagesData.Clear();
-
-            OnPropertyChanged(nameof(AllMessagesData));
-            OnPropertyChanged(nameof(LiveMessagesData));
-        }
-
-
-        public void ClearConsole()
-        {
-            ConsoleData.Clear();
-            OnPropertyChanged(nameof(ConsoleData));
-        }
-
-
         private float Timestamp()
         {
             return Runtime.CurrentRuntime / 1000.0f;
@@ -135,9 +112,9 @@ namespace inspector
         {
             if (IsConnected)
             {
-                if (_sendingPerSecondQueue.Count > 0)
+                if (queue.Count > 0)
                 {
-                    return $"{_sendingPerSecondQueue.Average()}/s";
+                    return $"{queue.Average()}/s";
                 }
 
                 return "0/s";
@@ -179,6 +156,7 @@ namespace inspector
         }
 
 
+
         #region Combobox Options Properties
         private ObservableCollection<string> QoS_OPTIONS = ["0 (At most once)", "1 (At least once)", "2 (Exactly once)"];
         /// <summary>
@@ -186,10 +164,7 @@ namespace inspector
         /// </summary>
         public ObservableCollection<string> QoSOptions
         {
-            get
-            {
-                return QoS_OPTIONS;
-            }
+            get => QoS_OPTIONS;
         }
 
 
@@ -199,12 +174,10 @@ namespace inspector
         /// </summary>
         public ObservableCollection<MessageFormat> MessageFormatOptions
         {
-            get
-            {
-                return MESSAGEFORMAT_OPTIONS;
-            }
+            get => MESSAGEFORMAT_OPTIONS;
         }
         #endregion
+
 
 
         #region Statusbar Properties 
@@ -252,10 +225,7 @@ namespace inspector
         /// </summary>
         public string SendingStatus
         {
-            get
-            {
-                return FormatRate(_sendingPerSecondQueue);
-            }
+            get => FormatRate(_sendingPerSecondQueue);
         }
 
 
@@ -266,10 +236,7 @@ namespace inspector
         /// </summary>
         public string ReceivingStatus
         {
-            get
-            {
-                return FormatRate(_receivingPerSecondQueue);
-            }
+            get => FormatRate(_receivingPerSecondQueue);
         }
 
 
@@ -326,49 +293,14 @@ namespace inspector
 
 
 
-
-        bool _areAllPaused = false;
-        /// <summary>
-        /// AreAllPaused stores the global paused/running state for the Pause All/Resume All button in the Publish tab
-        /// </summary>
-        public bool AreAllPaused
-        {
-            get
-            {
-                return _areAllPaused;
-            }
-
-            set
-            {
-                _areAllPaused = value;
-                OnPropertyChanged(nameof(AreAllPaused));
-            }
-        }
-
-        
-
-        // determines whether the user can pause/resume/kill all periodic messages
-        public bool CanModifyAll
-        {
-            get
-            {
-                return _mqttScheduler.TotalMessageCount() > 0;
-            }
-        }
-
-
-
-
+        #region Notification Properties
         private int _notificationCount = 0;
         /// <summary>
         /// NotificationCount stores the total number of unread error notifications for use in the hover tooltip
         /// </summary>
         public int NotificationCount
         {
-            get
-            {
-                return _notificationCount;
-            }
+            get => _notificationCount;
 
             set
             {
@@ -400,311 +332,18 @@ namespace inspector
                 return $"{NotificationCount} Notification{pluralize}";
             }
         }
+        #endregion
 
 
 
-
-        
-
-
-
-        
-
-
-
-
-
-        
-
-
-        
-        private bool _isConnected = false;
-        /// <summary>
-        /// IsConnected stores the current broker connection state
-        /// </summary>
-        public bool IsConnected
-        {
-            get => _isConnected;
-
-            set
-            {
-                _isConnected = value;
-
-                OnPropertyChanged(nameof(IsConnected));
-                OnPropertyChanged(nameof(IsDisconnected));
-
-                OnPropertyChanged(nameof(ConnectionStatus));
-                OnPropertyChanged(nameof(ConnectionStatusToolTip));
-                OnPropertyChanged(nameof(SendingStatus));
-                OnPropertyChanged(nameof(ReceivingStatus));
-                OnPropertyChanged(nameof(SendingReceivingToolTip));
-                OnPropertyChanged(nameof(CanModifyAll));
-            }
-        }
-
-
-        /// <summary>
-        /// IsDisconnected stores the inverse current broker connection state
-        /// <br/>
-        /// <b>USAGE: disable various controls to prevent editing when not connected</b>
-        /// </summary>
-        public bool IsDisconnected
-        {
-            get
-            {
-                return !IsConnected;
-            }
-        }
-
-
-
-        
-
-
-        public bool IsSubscribedToCurrent
-        {
-            get
-            {
-                return SubscribedMessagesData.Contains(SubscribeTopic);
-            }
-        }
-
-        public bool IsSubscribeQoSEditable
-        {
-            get
-            {
-                // can't edit the QoS if the message is already subscribed
-                return !(IsConnected && IsSubscribedToCurrent);
-            }
-        }
-
-        private void HandleMissing(string whatsMissing, string context, ref bool hadError)
-        {
-            WriteConsole($"Specify a {whatsMissing} to {context}", LogLevel.Error);
-            hadError = true;
-        }
-
-        public async void Connect()
-        {
-            bool hadError = false;
-
-            const string context = "connect";
-
-            if (ConnectIP == "") HandleMissing("broker IP", context, ref hadError);
-            if (ConnectPort == "") HandleMissing("broker port", context, ref hadError);
-
-            if (ConnectEnableTLS)
-            {
-                if (ConnectCertCA == "") HandleMissing("root CA certificate", context, ref hadError);
-                if (ConnectCertClient == "") HandleMissing("client certificate", context, ref hadError);
-                if (ConnectCertPrivate == "") HandleMissing("private key", context, ref hadError);
-            }
-
-            if (hadError)
-            {
-                return;
-            }
-
-
-            if (!ConnectEnableTLS)
-            {
-                var mqttClientOptions = new MqttClientOptionsBuilder()
-                    .WithTcpServer(ConnectIP, int.Parse(ConnectPort))
-                        .Build();
-
-                int jobID = jobID = _jobScheduler.BeginJob("Connecting to MQTT broker");
-
-                try
-                {
-                    using (var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
-                    {
-                        var response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
-                        IsConnected = true;
-                        WriteConsole($"Connected to {ConnectIP}:{ConnectPort} (Result Code: {response.ResultCode})", LogLevel.Info);
-
-                        var concurrent = new SemaphoreSlim(Environment.ProcessorCount);
-
-                        _mqttClient.ApplicationMessageReceivedAsync += async ea =>
-                        {
-                            // TODO: utilize shutdownToken for WaitASync, Task.Run
-
-                            await concurrent.WaitAsync().ConfigureAwait(false);
-
-                            async Task ProcessAsync()
-                            {
-                                try
-                                {
-                                    float timestamp = Timestamp();
-                                    string topic = ea.ApplicationMessage.Topic;
-                                    string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
-                                    int qos = (int)ea.ApplicationMessage.QualityOfServiceLevel;
-
-                                    Application.Current.Dispatcher.Invoke(() =>
-                                    {
-                                        _currentReceivedCount++;
-
-                                        var loggedMessage = new LoggedMessage(timestamp, topic, message, qos);
-                                        
-                                        AllMessagesData.Add(loggedMessage);
-                                        LiveMessagesData[topic] = loggedMessage;
-                                        
-                                        OnPropertyChanged(nameof(AllMessagesData));
-                                        OnPropertyChanged(nameof(LiveMessagesData));
-                                    });
-
-                                    //await Task.Delay(1000);
-                                }
-
-                                catch
-                                {
-
-                                }
-
-                                finally
-                                {
-                                    concurrent.Release();
-                                }
-                            }
-
-                            _ = Task.Run(ProcessAsync);
-                        };
-                    }
-                }
-
-                catch
-                {
-                    WriteConsole($"Could not connect to {ConnectIP}:{ConnectPort}", LogLevel.Error);
-                }
-
-                _jobScheduler.EndJob(jobID);
-                UpdateJobProgress();
-            }
-
-            else
-            {
-                WriteConsole("TLS connections are currently unsupported", LogLevel.Error);
-            }
-        }
-
-        public async void Disconnect()
-        {
-            int jobID = jobID = _jobScheduler.BeginJob("Disconnecting from MQTT broker");
-
-            try
-            {
-                await _mqttClient.DisconnectAsync();
-                IsConnected = false;
-                WriteConsole($"Disconnected from {ConnectIP}:{ConnectPort}", LogLevel.Info);
-
-                SubscribedMessagesData.Clear();
-            }
-
-            catch
-            {
-                WriteConsole($"Could not disconnect from {ConnectIP}:{ConnectPort}", LogLevel.Error);
-            }
-
-            _jobScheduler.EndJob(jobID);
-            UpdateJobProgress();
-        }
-
-
-
-        private bool ValidateSubscribeInputs(string context)
-        {
-            bool hadError = false;
-
-            if (SubscribeTopic == "") HandleMissing("subscription topic", context, ref hadError);
-
-            // inverting because we only validate if no errors occurred
-            return !hadError;
-        }
-
-
-        /// <summary>
-        /// Subscribe() spawns a job to subscribe to the topic selected in the SubscribeTopic combobox in the Subscribe tab
-        /// </summary>
-        public async void Subscribe()
-        {
-            if (ValidateSubscribeInputs("subscribe"))
-            {
-                int jobID = _jobScheduler.BeginJob("Subscribing to MQTT topic");
-
-                try
-                {
-                    // NOTE: MQTT.net enum definition is compatible with straight integers so cast is OK
-                    // AtMostOnce = 0x00,
-                    // AtLeastOnce = 0x01,
-                    // ExactlyOnce = 0x02
-
-                    // TODO: add a checkbox to set NoLocal (we don't get our own messages)
-
-                    var mqttSubscribeOptions = new MqttClientSubscribeOptionsBuilder()
-                        .WithTopicFilter(SubscribeTopic, SubscribeQoS, false)
-                            .Build();
-
-                    var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
-                    //TODO: error handling if something went from subscribing here
-
-                    SubscribedMessagesData.Add(SubscribeTopic);
-                    WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", LogLevel.Info);
-                }
-
-                catch
-                {
-                    WriteConsole($"Could not subscribe to {SubscribeTopic}", LogLevel.Error);
-                }
-
-                _jobScheduler.EndJob(jobID);
-                UpdateJobProgress();
-            }
-        }
-
-        /// <summary>
-        /// Unsubscribe() spawns a job to unsubscribe from the topic selected in the SubscribeTopic combobox in the Subscribe tab
-        /// </summary>
-        public async void Unsubscribe()
-        {
-            if (ValidateSubscribeInputs("unsubscribe"))
-            {
-                int jobID = _jobScheduler.BeginJob("Unsubscribing from MQTT topic");
-
-                try
-                {
-                    var mqttUnsubscribeOptions = new MqttClientUnsubscribeOptionsBuilder()
-                        .WithTopicFilter(SubscribeTopic)
-                            .Build();
-
-                    var response = await _mqttClient.UnsubscribeAsync(mqttUnsubscribeOptions);
-                    //TODO: error handling if something went from unsubscribing here
-
-                    SubscribedMessagesData.Remove(SubscribeTopic);
-                    WriteConsole($"Unsubscribed from {SubscribeTopic}", LogLevel.Info);
-                }
-
-                catch
-                {
-                    WriteConsole($"Could not unsubscribe from {SubscribeTopic}", LogLevel.Error);
-                }
-
-                _jobScheduler.EndJob(jobID);
-                UpdateJobProgress();
-            }
-        }
-
-
-
-    #region Item Source Properties
+        #region Item Source Properties
         private ObservableCollection<string> _consoleData = new();
         /// <summary>
         /// ConsoleData is the item source for the listview in the Console window
         /// </summary>
         public ObservableCollection<string> ConsoleData
         {
-            get
-            {
-                return _consoleData;
-            }
+            get => _consoleData;
         }
 
 
@@ -751,7 +390,7 @@ namespace inspector
 
 
 
-        #region Connect Tab Properties
+        #region Connect Tab Input Properties
         private string _connectIP = string.Empty;
         /// <summary>
         /// ConnectIP stores the contents of the broker IP combobox in the Connect tab
@@ -841,10 +480,7 @@ namespace inspector
         /// </summary>
         public string ConnectCertPrivate
         {
-            get
-            {
-                return _connectCertPrivate;
-            }
+            get => _connectCertPrivate;
 
             set
             {
@@ -856,23 +492,61 @@ namespace inspector
 
 
 
-        #region Subscribe Tab Properties
+        #region Connect Tab Output Properties
+        private bool _isConnected = false;
+        /// <summary>
+        /// IsConnected stores the current broker connection state
+        /// </summary>
+        public bool IsConnected
+        {
+            get => _isConnected;
+
+            set
+            {
+                _isConnected = value;
+
+                OnPropertyChanged(nameof(IsConnected));
+                OnPropertyChanged(nameof(IsDisconnected));
+
+                OnPropertyChanged(nameof(ConnectionStatus));
+                OnPropertyChanged(nameof(ConnectionStatusToolTip));
+
+                OnPropertyChanged(nameof(SendingStatus));
+                OnPropertyChanged(nameof(ReceivingStatus));
+                OnPropertyChanged(nameof(SendingReceivingToolTip));
+
+                OnPropertyChanged(nameof(IsAnyTopicScheduled));
+            }
+        }
+
+
+        /// <summary>
+        /// IsDisconnected stores the inverse current broker connection state
+        /// <br/>
+        /// <b>USAGE: disable various controls to prevent editing when not connected</b>
+        /// </summary>
+        public bool IsDisconnected
+        {
+            get => !IsConnected;
+        }
+        #endregion
+
+
+
+        #region Subscribe Tab Input Properties
         private string _subscribeTopic = string.Empty;
         /// <summary>
         /// SubscribeTopic stores the contents of the message topic combobox in the Subscribe tab
         /// </summary>
         public string SubscribeTopic
         {
-            get
-            {
-                return _subscribeTopic;
-            }
-
+            get => _subscribeTopic;
+            
             set
             {
                 _subscribeTopic = value;
                 OnPropertyChanged(nameof(SubscribeTopic));
-                OnPropertyChanged(nameof(IsSubscribedToCurrent));
+                OnPropertyChanged(nameof(IsCurrentTopicSubscribed));
                 OnPropertyChanged(nameof(IsSubscribeQoSEditable));
             }
         }
@@ -884,16 +558,36 @@ namespace inspector
         /// </summary>
         public MqttQualityOfServiceLevel SubscribeQoS
         {
-            get
-            {
-                return _subscribeQoS;
-            }
+            get => _subscribeQoS;
 
             set
             {
                 _subscribeQoS = value;
                 OnPropertyChanged(nameof(SubscribeQoS));
             }
+        }
+        #endregion 
+
+
+
+        #region Subscribe Tab Output Properties
+        /// <summary>
+        /// IsCurrentTopicSubscribed stores whether or not the topic selected in the Subscribe tab is subscribed on the client
+        /// </summary>
+        public bool IsCurrentTopicSubscribed
+        {
+            get => SubscribedMessagesData.Contains(SubscribeTopic);
+        }
+
+
+        /// <summary>
+        /// IsSubscribeQoSEditable stores whether or not the quality of service dropdown in the Subscribe tab can be edited
+        /// <br/>
+        /// <b>NOTE: the quality of service is not editable is the selected message topic is currently subscribed</b>
+        /// </summary>
+        public bool IsSubscribeQoSEditable
+        {
+            get => !(IsConnected && IsCurrentTopicSubscribed);
         }
         #endregion 
 
@@ -1015,7 +709,16 @@ namespace inspector
         #endregion
 
 
+
         #region Publish Tab Output Properties
+        /// <summary>
+        /// IsCurrentTopicOnline stores whether or not the topic currently selected in the Publish tab is actively transmitting
+        /// </summary>
+        public bool IsCurrentTopicOnline
+        {
+            get => PublishIsPeriodic && IsCurrentTopicScheduled && !IsCurrentTopicPaused && !IsPeriodicGloballyPaused;
+        }
+
         /// <summary>
         /// TransmissionStatus stores the text used for the transmission status label in the Publish tab
         /// </summary>
@@ -1023,22 +726,27 @@ namespace inspector
         {
             get
             {
-                if (IsCurrentTopicScheduled)
+                if (!IsPeriodicGloballyPaused)
                 {
-                    if (IsCurrentTopicPaused)
+                    if (IsCurrentTopicScheduled)
                     {
-                        return "PAUSED";
+                        if (IsCurrentTopicPaused)
+                        {
+                            return "PAUSED";
+                        }
+
+                        return "ONLINE";
                     }
 
-                    return "ON-LINE";
+                    if (PublishIsPeriodic)
+                    {
+                        return "PENDING";
+                    }
+
+                    return "SINGLE SHOT";
                 }
 
-                if (PublishIsPeriodic)
-                {
-                    return "PENDING";
-                }
-
-                return "SINGLE SHOT";
+                return "ALL TOPICS PAUSED";
             }
         }
 
@@ -1063,25 +771,25 @@ namespace inspector
                 return "Publish";
             }
         }
-        #endregion
 
 
-        
+        /// <summary>
+        /// IsAnyTopicScheduled stores whether or not there are any periodic topics currently scheduled for transmission
+        /// <br/>
+        /// <b>NOTE: controls if the user can pause/resume/kill ALL periodic messages</b>
+        /// </summary>
+        public bool IsAnyTopicScheduled
+        {
+            get => (_mqttScheduler.TotalMessageCount() > 0);
+        }
+
 
         /// <summary>
         /// IsCurrentTopicScheduled stores whether or not the topic currently selected in the Publish tab is scheduled to be transmitted
         /// </summary>
         public bool IsCurrentTopicScheduled
         {
-            get
-            {
-                if (_mqttScheduler.IsMessageScheduled(PublishTopic))
-                {
-                    return true;
-                }
-
-                return false;
-            }
+            get => _mqttScheduler.IsMessageScheduled(PublishTopic);
         }
 
 
@@ -1090,27 +798,7 @@ namespace inspector
         /// </summary>
         public bool IsCurrentTopicPaused
         {
-            get
-            {
-                if (_mqttScheduler.IsMessagePaused(PublishTopic))
-                {
-                    return true;
-                }
-
-                return false;
-            }
-        }
-
-
-        /// <summary>
-        /// IsCurrentTopicOnline stores whether or not the topic currently selected in the Publish tab is actively transmitting
-        /// </summary>
-        public bool IsCurrentTopicOnline
-        {
-            get
-            {
-                return PublishIsPeriodic && IsCurrentTopicScheduled && !IsCurrentTopicPaused && !AreAllPaused;
-            }
+            get => _mqttScheduler.IsMessagePaused(PublishTopic);
         }
 
 
@@ -1121,65 +809,304 @@ namespace inspector
         /// </summary>
         public bool IsCurrentTopicPausable
         {
-            get
-            {
-                return PublishIsPeriodic && IsCurrentTopicScheduled && !AreAllPaused;
-            }
+            get => PublishIsPeriodic && IsCurrentTopicScheduled && !IsPeriodicGloballyPaused;
         }
 
-        
 
-       
-        
-
-
-        // TODO: abstract this stuff below away (since Viewmodel is not responsible for `business logic`)
-        public void Pause()
+        bool _isPeriodicGloballyPaused = false;
+        /// <summary>
+        /// IsPeriodicGloballyPaused stores the global paused/running state for the Pause All/Resume All button in the Publish tab
+        /// </summary>
+        public bool IsPeriodicGloballyPaused
         {
-            if (_mqttScheduler.TryPauseMessage(PublishTopic))
+            get => _isPeriodicGloballyPaused;
+
+            set
             {
-                UpdatePublishTab();
+                _isPeriodicGloballyPaused = value;
+                OnPropertyChanged(nameof(IsPeriodicGloballyPaused));
+            }
+        }
+        #endregion
+
+
+
+        #region Button Callback Helper Functions
+        private void HandleMissing(string whatsMissing, string context, ref bool hadError)
+        {
+            WriteConsole($"Specify a {whatsMissing} to {context}", LogLevel.Error);
+            hadError = true;
+        }
+
+        private bool ValidateSubscribeInputs(string context)
+        {
+            bool hadError = false;
+
+            if (SubscribeTopic == "") HandleMissing("subscription topic", context, ref hadError);
+
+            // inverting because we only validate if no errors occurred
+            return !hadError;
+        }
+
+        private void UpdatePublishTab()
+        {
+            OnPropertyChanged(nameof(PublishIsPeriodic));
+            OnPropertyChanged(nameof(IsCurrentTopicScheduled));
+            OnPropertyChanged(nameof(PublishStatus));
+            OnPropertyChanged(nameof(TransmissionStatus));
+            OnPropertyChanged(nameof(IsCurrentTopicPausable));
+            OnPropertyChanged(nameof(IsCurrentTopicPaused));
+            OnPropertyChanged(nameof(IsCurrentTopicOnline));
+            OnPropertyChanged(nameof(IsAnyTopicScheduled));
+        }
+        #endregion
+
+
+
+        #region Button Callback Functions
+        /// <summary>
+        /// Connect() attempts to create an MQTT connection to the broker on selected IP and port in the Connect tab
+        /// </summary>
+        public async void Connect()
+        {
+            bool hadError = false;
+
+            const string context = "connect";
+
+            if (ConnectIP == "") HandleMissing("broker IP", context, ref hadError);
+            if (ConnectPort == "") HandleMissing("broker port", context, ref hadError);
+
+            if (ConnectEnableTLS)
+            {
+                if (ConnectCertCA == "") HandleMissing("root CA certificate", context, ref hadError);
+                if (ConnectCertClient == "") HandleMissing("client certificate", context, ref hadError);
+                if (ConnectCertPrivate == "") HandleMissing("private key", context, ref hadError);
+            }
+
+            if (hadError)
+            {
                 return;
             }
 
-            WriteConsole($"Could not pause {PublishTopic}", LogLevel.Error);
-        }
 
-        public void Resume()
-        {
-            if (_mqttScheduler.TryResumeMessage(PublishTopic))
+            if (!ConnectEnableTLS)
             {
-                UpdatePublishTab();
-                return;
+                var mqttClientOptions = new MqttClientOptionsBuilder()
+                    .WithTcpServer(ConnectIP, int.Parse(ConnectPort))
+                        .Build();
+
+                int jobID = jobID = _jobScheduler.BeginJob("Connecting to MQTT broker");
+
+                try
+                {
+                    using (var timeoutToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                    {
+                        var response = await _mqttClient.ConnectAsync(mqttClientOptions, timeoutToken.Token);
+                        IsConnected = true;
+                        WriteConsole($"Connected to {ConnectIP}:{ConnectPort} (Result Code: {response.ResultCode})", LogLevel.Info);
+
+                        var concurrent = new SemaphoreSlim(Environment.ProcessorCount);
+
+                        _mqttClient.ApplicationMessageReceivedAsync += async ea =>
+                        {
+                            // TODO: utilize shutdownToken for WaitASync, Task.Run 
+                            // this should the crashing bug that happens if we are transmitting messages and hit the X button to close down 
+
+                            await concurrent.WaitAsync().ConfigureAwait(false);
+
+                            async Task ProcessAsync()
+                            {
+                                try
+                                {
+                                    float timestamp = Timestamp();
+                                    string topic = ea.ApplicationMessage.Topic;
+                                    string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
+                                    int qos = (int)ea.ApplicationMessage.QualityOfServiceLevel;
+
+                                    Application.Current.Dispatcher.Invoke(() =>
+                                    {
+                                        _currentReceivedCount++;
+
+                                        var loggedMessage = new LoggedMessage(timestamp, topic, message, qos);
+
+                                        AllMessagesData.Add(loggedMessage);
+                                        LiveMessagesData[topic] = loggedMessage;
+
+                                        OnPropertyChanged(nameof(AllMessagesData));
+                                        OnPropertyChanged(nameof(LiveMessagesData));
+                                    });
+
+                                    //await Task.Delay(1000);
+                                }
+
+                                catch
+                                {
+
+                                }
+
+                                finally
+                                {
+                                    concurrent.Release();
+                                }
+                            }
+
+                            _ = Task.Run(ProcessAsync);
+                        };
+                    }
+                }
+
+                catch
+                {
+                    WriteConsole($"Could not connect to {ConnectIP}:{ConnectPort}", LogLevel.Error);
+                }
+
+                _jobScheduler.EndJob(jobID);
+                UpdateJobProgress();
             }
 
-            WriteConsole($"Could not resume {PublishTopic}", LogLevel.Error);
+            else
+            {
+                WriteConsole("TLS connections are currently unsupported", LogLevel.Error);
+            }
         }
 
-        public void PauseAll()
+
+        /// <summary>
+        /// Disconnect() attempts to disconnect from the broker to which the client is currently connected
+        /// </summary>
+        public async void Disconnect()
         {
-            _mqttScheduler.PauseAll();
-            AreAllPaused = true;
-            UpdatePublishTab();
+            int jobID = jobID = _jobScheduler.BeginJob("Disconnecting from MQTT broker");
+
+            try
+            {
+                await _mqttClient.DisconnectAsync();
+                IsConnected = false;
+                WriteConsole($"Disconnected from {ConnectIP}:{ConnectPort}", LogLevel.Info);
+
+                SubscribedMessagesData.Clear();
+            }
+
+            catch
+            {
+                WriteConsole($"Could not disconnect from {ConnectIP}:{ConnectPort}", LogLevel.Error);
+            }
+
+            _jobScheduler.EndJob(jobID);
+            UpdateJobProgress();
         }
 
-        public void ResumeAll()
+
+        /// <summary>
+        /// ConnectDisconnect() connects to or disconnects from the broker on the selected IP and port in the Connect tab
+        /// </summary>
+        public void ConnectDisconnect()
         {
-            _mqttScheduler.ResumeAll();
-            AreAllPaused = false;
-            UpdatePublishTab();
+            if (IsConnected)
+            {
+                Disconnect();
+            }
+
+            else
+            {
+                Connect();
+            }
         }
 
-        public void KillAll()
+
+        /// <summary>
+        /// Subscribe() spawns a job to subscribe to the topic selected in the SubscribeTopic combobox in the Subscribe tab
+        /// </summary>
+        public async void Subscribe()
         {
-            _mqttScheduler.KillAll();
-            UpdatePublishTab();
+            if (ValidateSubscribeInputs("subscribe"))
+            {
+                int jobID = _jobScheduler.BeginJob("Subscribing to MQTT topic");
+
+                try
+                {
+                    // NOTE: MQTT.net enum definition is compatible with straight integers so cast is OK
+                    // AtMostOnce = 0x00,
+                    // AtLeastOnce = 0x01,
+                    // ExactlyOnce = 0x02
+
+                    // TODO: add a checkbox to set NoLocal (we don't get our own messages)
+
+                    var mqttSubscribeOptions = new MqttClientSubscribeOptionsBuilder()
+                        .WithTopicFilter(SubscribeTopic, SubscribeQoS, false)
+                            .Build();
+
+                    var response = await _mqttClient.SubscribeAsync(mqttSubscribeOptions);
+                    //TODO: error handling if something went from subscribing here
+
+                    SubscribedMessagesData.Add(SubscribeTopic);
+                    WriteConsole($"Subscribed to {SubscribeTopic} with QoS {SubscribeQoS}", LogLevel.Info);
+                }
+
+                catch
+                {
+                    WriteConsole($"Could not subscribe to {SubscribeTopic}", LogLevel.Error);
+                }
+
+                _jobScheduler.EndJob(jobID);
+                UpdateJobProgress();
+            }
         }
-        // refactor above
 
 
+        /// <summary>
+        /// Unsubscribe() spawns a job to unsubscribe from the topic selected in the SubscribeTopic combobox in the Subscribe tab
+        /// </summary>
+        public async void Unsubscribe()
+        {
+            if (ValidateSubscribeInputs("unsubscribe"))
+            {
+                int jobID = _jobScheduler.BeginJob("Unsubscribing from MQTT topic");
+
+                try
+                {
+                    var mqttUnsubscribeOptions = new MqttClientUnsubscribeOptionsBuilder()
+                        .WithTopicFilter(SubscribeTopic)
+                            .Build();
+
+                    var response = await _mqttClient.UnsubscribeAsync(mqttUnsubscribeOptions);
+                    //TODO: error handling if something went from unsubscribing here
+
+                    SubscribedMessagesData.Remove(SubscribeTopic);
+                    WriteConsole($"Unsubscribed from {SubscribeTopic}", LogLevel.Info);
+                }
+
+                catch
+                {
+                    WriteConsole($"Could not unsubscribe from {SubscribeTopic}", LogLevel.Error);
+                }
+
+                _jobScheduler.EndJob(jobID);
+                UpdateJobProgress();
+            }
+        }
 
 
+        /// <summary>
+        /// SubscribeUnsubscribe() subscribes or unsubscribes from the topic currently selected in the Subscribe tab
+        /// </summary>
+        public void SubscribeUnsubscribe()
+        {
+            if (IsCurrentTopicSubscribed)
+            {
+                Unsubscribe();
+            }
+
+            else
+            {
+                Subscribe();
+            }
+        }
+
+
+        /// <summary>
+        /// Publish() publishes the topic currently selected in the Publish tab with the specified quality of service, payload/message, and format
+        /// </summary>
         public async void Publish()
         {
             bool hadError = false;
@@ -1204,52 +1131,52 @@ namespace inspector
                 switch (PublishMessageFormat)
                 {
                     case MessageFormat.String:
+                    {
+                        if (!PublishIsPeriodic)
                         {
-                            if (!PublishIsPeriodic)
+                            var applicationMessage = new MqttApplicationMessageBuilder()
+                                .WithTopic(PublishTopic)
+                                    .WithPayload(PublishMessage)
+                                        .WithRetainFlag(PublishRetainFlag)
+                                            .WithQualityOfServiceLevel(PublishQoS)
+                                                .Build();
+
+                            //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, PublishQoS, RetainFlag);
+
+                            var response = await _mqttClient.PublishAsync(applicationMessage);
+                            _currentSentCount++;
+                            var retain = PublishRetainFlag ? "with" : "without";
+                            WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", LogLevel.Info);
+                        }
+
+                        else
+                        {
+                            // TODO: add support for other publish formats (binary, protobuf) here!
+                            if (!IsCurrentTopicScheduled)
                             {
-                                var applicationMessage = new MqttApplicationMessageBuilder()
-                                    .WithTopic(PublishTopic)
-                                        .WithPayload(PublishMessage)
-                                            .WithRetainFlag(PublishRetainFlag)
-                                                .WithQualityOfServiceLevel(PublishQoS)
-                                                    .Build();
-
-                                //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, PublishQoS, RetainFlag);
-
-                                var response = await _mqttClient.PublishAsync(applicationMessage);
-                                _currentSentCount++;
-                                var retain = PublishRetainFlag ? "with" : "without";
-                                WriteConsole($"Published {PublishMessage} to {PublishTopic} at QoS {PublishQoS} {retain} retain", LogLevel.Info);
+                                _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, PublishRetainFlag, int.Parse(PublishPeriodicRate));
                             }
 
                             else
                             {
-                                // TODO: add support for other publish formats (binary, protobuf) here!
-                                if (!IsCurrentTopicScheduled)
-                                {
-                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, PublishRetainFlag, int.Parse(PublishPeriodicRate));
-                                }
-
-                                else
-                                {
-                                    _mqttScheduler.TryRemoveMessageSchedule(PublishTopic);
-                                }
+                                _mqttScheduler.TryRemoveMessageSchedule(PublishTopic);
                             }
                         }
-                        break;
+                    }
+                    break;
 
                     case MessageFormat.Binary:
-                        {
-                            //_mqttClient.PublishAsyncBinary();
-                            WriteConsole($"Publishing in binary format is not currently supported", LogLevel.Error);
-                        }
-                        break;
+                    {
+                        //_mqttClient.PublishAsyncBinary();
+                        WriteConsole($"Publishing in binary format is not currently supported", LogLevel.Error);
+                    }
+                    break;
 
                     case MessageFormat.Protobuf3:
-                        {
-                            WriteConsole($"Publishing in Protobuf3 format is not currently supported", LogLevel.Error);
-                        }
-                        break;
+                    {
+                        WriteConsole($"Publishing in Protobuf3 format is not currently supported", LogLevel.Error);
+                    }
+                    break;
                 }
             }
 
@@ -1263,16 +1190,143 @@ namespace inspector
             UpdateJobProgress();
         }
 
-        public void UpdatePublishTab()
+
+        /// <summary>
+        /// Pause() individually pauses the topic currently selected in the Publish tab
+        /// </summary>
+        private void Pause()
         {
-            OnPropertyChanged(nameof(PublishIsPeriodic));
-            OnPropertyChanged(nameof(IsCurrentTopicScheduled));
-            OnPropertyChanged(nameof(PublishStatus));
-            OnPropertyChanged(nameof(TransmissionStatus));
-            OnPropertyChanged(nameof(IsCurrentTopicPausable));
-            OnPropertyChanged(nameof(IsCurrentTopicPaused));
-            OnPropertyChanged(nameof(IsCurrentTopicOnline));
-            OnPropertyChanged(nameof(CanModifyAll));
+            if (_mqttScheduler.TryPauseMessage(PublishTopic))
+            {
+                UpdatePublishTab();
+                return;
+            }
+
+            WriteConsole($"Could not pause {PublishTopic}", LogLevel.Error);
         }
+
+
+        /// <summary>
+        /// Resume() individually resumes the topic currently selected in the Publish tab
+        /// </summary>
+        private void Resume()
+        {
+            if (_mqttScheduler.TryResumeMessage(PublishTopic))
+            {
+                UpdatePublishTab();
+                return;
+            }
+
+            WriteConsole($"Could not resume {PublishTopic}", LogLevel.Error);
+        }
+
+
+        /// <summary>
+        /// PauseResume() individually pauses or resumes the topic currently selected in the Publish tab
+        /// </summary>
+        public void PauseResume()
+        {
+            if (IsCurrentTopicPaused)
+            {
+                Resume();
+            }
+
+            else
+            {
+                Pause();
+            }
+        }
+
+
+        /// <summary>
+        /// PauseAll() globally pauses all messages scheduled for transmission
+        /// </summary>
+        private void PauseAll()
+        {
+            _mqttScheduler.PauseAll();
+            IsPeriodicGloballyPaused = true;
+            UpdatePublishTab();
+        }
+
+
+        /// <summary>
+        /// ResumeAll() globally resumes all messages scheduled for transmission
+        /// </summary>
+        private void ResumeAll()
+        {
+            _mqttScheduler.ResumeAll();
+            IsPeriodicGloballyPaused = false;
+            UpdatePublishTab();
+        }
+
+
+        /// <summary>
+        /// PauseResumeAll() globally pauses or resumes all messages scheduled for transmission
+        /// </summary>
+        public void PauseResumeAll()
+        {
+            if (IsPeriodicGloballyPaused)
+            {
+                ResumeAll();
+            }
+
+            else
+            {
+                PauseAll();
+            }
+        }
+
+
+        /// <summary>
+        /// KillAll() entirely deletes all messages scheduled for transmission
+        /// </summary>
+        public void KillAll()
+        {
+            _mqttScheduler.KillAll();
+            UpdatePublishTab();
+        }
+
+
+        /// <summary>
+        /// ExecuteCommand() parses and executes the command curently selected in the console
+        /// </summary>
+        public void ExecuteCommand()
+        {
+            // TODO: implement command processing/parsing here!
+            WriteConsole($"Executing command...", LogLevel.Info);
+        }
+
+
+        /// <summary>
+        /// ClearData() clears all the data contained in the All Messages and Live Messages tabs in the Message window
+        /// </summary>
+        public void ClearData()
+        {
+            AllMessagesData.Clear();
+            LiveMessagesData.Clear();
+
+            OnPropertyChanged(nameof(AllMessagesData));
+            OnPropertyChanged(nameof(LiveMessagesData));
+        }
+
+
+        /// <summary>
+        /// ClearConsole() clears all the logged messages in the Console window
+        /// </summary>
+        public void ClearConsole()
+        {
+            ConsoleData.Clear();
+            OnPropertyChanged(nameof(ConsoleData));
+        }
+
+
+        /// <summary>
+        /// SilenceNotification() rescinds any error messages from the notification button and Console window
+        /// </summary>
+        public void SilenceNotification()
+        {
+            NotificationCount = 0;
+        }
+        #endregion       
     }
 }

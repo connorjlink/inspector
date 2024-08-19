@@ -245,7 +245,7 @@
 
                     <Button Grid.Row="2"
                             Margin="5"
-                            Content="{Binding IsSubscribedToCurrent, Converter={StaticResource SubscribeStatusConverter}}"
+                            Content="{Binding IsCurrentTopicSubscribed, Converter={StaticResource SubscribeStatusConverter}}"
                             Click="SubscribeButton_Clicked"
                             IsEnabled="{Binding IsConnected}"/>
 
@@ -444,14 +444,14 @@
 
                     <Grid Grid.Row="8"
                           Margin="5"
-                          IsEnabled="{Binding CanModifyAll}">
+                          IsEnabled="{Binding IsAnyTopicScheduled}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
                         <Button Grid.Column="0"
-                                Content="{Binding AreAllPaused, Converter={StaticResource PauseAllTextConverter}}"
+                                Content="{Binding IsPeriodicGloballyPaused, Converter={StaticResource PauseAllTextConverter}}"
                                 Click="PauseAllButton_Clicked"
                                 Margin="0, 0, 5, 0"/>
 
@@ -480,8 +480,7 @@
                                   AutoGenerateColumns="False"
                                   BorderBrush="Gray"
                                   BorderThickness="2"
-                                  IsReadOnly="True"
-                                  IsEnabled="{Binding CanModifyAll}">
+                                  IsReadOnly="True">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
                                 <DataGridTextColumn Header="Status" Binding="{Binding Status}"/>

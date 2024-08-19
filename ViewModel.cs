@@ -899,7 +899,7 @@ namespace inspector
 
 
 
-        #region Publish Tab Properties
+        #region Publish Tab Input Properties
         private string _publishTopic = string.Empty;
         /// <summary>
         /// PublishTopic stores the contents of the topic combobox in the Publish tab
@@ -1015,13 +1015,63 @@ namespace inspector
         #endregion
 
 
+        #region Publish Tab Output Properties
+        /// <summary>
+        /// TransmissionStatus stores the text used for the transmission status label in the Publish tab
+        /// </summary>
+        public string TransmissionStatus
+        {
+            get
+            {
+                if (IsCurrentTopicScheduled)
+                {
+                    if (IsCurrentTopicPaused)
+                    {
+                        return "PAUSED";
+                    }
+
+                    return "ON-LINE";
+                }
+
+                if (PublishIsPeriodic)
+                {
+                    return "PENDING";
+                }
+
+                return "SINGLE SHOT";
+            }
+        }
 
 
+        /// <summary>
+        /// PublishStatus stores the text used for the publish button in the Publish tab
+        /// </summary>
+        public string PublishStatus
+        {
+            get
+            {
+                if (PublishIsPeriodic)
+                {
+                    if (IsCurrentTopicScheduled)
+                    {
+                        return "Stop Transmitting";
+                    }
+
+                    return "Start Transmitting";
+                }
+
+                return "Publish";
+            }
+        }
+        #endregion
 
 
+        
 
-
-        public bool IsTransmitting
+        /// <summary>
+        /// IsCurrentTopicScheduled stores whether or not the topic currently selected in the Publish tab is scheduled to be transmitted
+        /// </summary>
+        public bool IsCurrentTopicScheduled
         {
             get
             {
@@ -1034,31 +1084,11 @@ namespace inspector
             }
         }
 
-        public bool IsPausable
-        {
-            get
-            {
-                return PublishIsPeriodic && IsTransmitting && !AreAllPaused;
-            }
-        }
 
-        public bool IsOnline
-        {
-            get
-            {
-                return PublishIsPeriodic && IsTransmitting && !IsPaused && !AreAllPaused;
-            }
-        }
-
-        public bool IsNotConnected
-        {
-            get
-            {
-                return !IsOnline;
-            }
-        }
-
-        public bool IsPaused
+        /// <summary>
+        /// IsCurrentTopicPaused stores whether or not the topic currently selected in the Publish tab was individually paused
+        /// </summary>
+        public bool IsCurrentTopicPaused
         {
             get
             {
@@ -1071,28 +1101,36 @@ namespace inspector
             }
         }
 
-        public string TransmissionStatus
+
+        /// <summary>
+        /// IsCurrentTopicOnline stores whether or not the topic currently selected in the Publish tab is actively transmitting
+        /// </summary>
+        public bool IsCurrentTopicOnline
         {
             get
             {
-                if (IsTransmitting)
-                {
-                    if (IsPaused)
-                    {
-                        return "PAUSED";
-                    }
-
-                    return "ONLINE";
-                }
-
-                if (PublishIsPeriodic)
-                {
-                    return "PENDING";
-                }
-
-                return "SINGLE SHOT";
+                return PublishIsPeriodic && IsCurrentTopicScheduled && !IsCurrentTopicPaused && !AreAllPaused;
             }
         }
+
+
+        /// <summary>
+        /// IsCurrentTopicPausable stores whether or not the topic currently selected in the Publish tab can be paused
+        /// <br/>
+        /// <b>NOTE: the pause/play button for individual topics is hidden if periodic topics are globally paused</b>
+        /// </summary>
+        public bool IsCurrentTopicPausable
+        {
+            get
+            {
+                return PublishIsPeriodic && IsCurrentTopicScheduled && !AreAllPaused;
+            }
+        }
+
+        
+
+       
+        
 
 
         // TODO: abstract this stuff below away (since Viewmodel is not responsible for `business logic`)
@@ -1187,7 +1225,7 @@ namespace inspector
                             else
                             {
                                 // TODO: add support for other publish formats (binary, protobuf) here!
-                                if (!IsTransmitting)
+                                if (!IsCurrentTopicScheduled)
                                 {
                                     _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, PublishRetainFlag, int.Parse(PublishPeriodicRate));
                                 }
@@ -1228,36 +1266,13 @@ namespace inspector
         public void UpdatePublishTab()
         {
             OnPropertyChanged(nameof(PublishIsPeriodic));
-            OnPropertyChanged(nameof(IsTransmitting));
+            OnPropertyChanged(nameof(IsCurrentTopicScheduled));
             OnPropertyChanged(nameof(PublishStatus));
             OnPropertyChanged(nameof(TransmissionStatus));
-            OnPropertyChanged(nameof(IsPausable));
-            OnPropertyChanged(nameof(IsPaused));
-            OnPropertyChanged(nameof(IsOnline));
-            OnPropertyChanged(nameof(IsNotConnected));
+            OnPropertyChanged(nameof(IsCurrentTopicPausable));
+            OnPropertyChanged(nameof(IsCurrentTopicPaused));
+            OnPropertyChanged(nameof(IsCurrentTopicOnline));
             OnPropertyChanged(nameof(CanModifyAll));
-        }
-
-
-        /// <summary>
-        /// PublishStatus stores the text used for the publish button in the Publish tab
-        /// </summary>
-        public string PublishStatus
-        {
-            get
-            {
-                if (PublishIsPeriodic)
-                {
-                    if (IsTransmitting)
-                    {
-                        return "Stop Transmitting";
-                    }
-
-                    return "Start Transmitting";
-                }
-                
-                return "Publish";
-            }
         }
     }
 }

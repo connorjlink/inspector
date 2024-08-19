@@ -417,7 +417,7 @@
                             <mah:ProgressRing Grid.Column="2"
                                               Height="20"
                                               Width="20"
-                                              IsActive="{Binding IsOnline}"
+                                              IsActive="{Binding IsCurrentTopicOnline}"
                                               HorizontalAlignment="Left"
                                               Margin="5, 0, 0, 0"
                                               Foreground="{DynamicResource MahApps.Brushes.Badged.Background}"/>
@@ -426,9 +426,9 @@
                             <!--Content="{Binding PauseStatus}"-->
                             <Button Grid.Column="3"
                                     HorizontalAlignment="Right"
-                                    Visibility="{Binding IsPausable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Visibility="{Binding IsCurrentTopicPausable, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Click="PauseButton_Clicked">
-                                <iconPacks:PackIconEntypo Kind="{Binding IsPaused, Converter={StaticResource PauseResumeButtonConverter}}"/>
+                                <iconPacks:PackIconEntypo Kind="{Binding IsCurrentTopicPaused, Converter={StaticResource PauseResumeButtonConverter}}"/>
                             </Button>
                         </Grid>
                     </Grid>
@@ -574,8 +574,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBox Grid.Column="0"/>
-                <Button Grid.Column="1" Content="Execute command"/>
+                <TextBox Grid.Column="0"
+                         Margin="0, 0, 10, 0"/>
+                
+                <Button Grid.Column="1" 
+                        Content="Execute Command"
+                        Padding="10, 0, 10, 0" 
+                        Click="ExecuteCommandButton_Clicked"/>
             </Grid>
         </Grid>
 

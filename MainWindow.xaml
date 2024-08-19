@@ -377,12 +377,12 @@
                                     Grid.Column="1"
                                     Orientation="Horizontal">
                             <CheckBox Content="Periodic"
-                                      IsChecked="{Binding IsPeriodic}"/>
+                                      IsChecked="{Binding PublishIsPeriodic}"/>
                             
                             <ComboBox Margin="5"
-                                      Text="{Binding PeriodicRate}"
+                                      Text="{Binding PublishPeriodicRate}"
                                       IsEditable="True"
-                                      IsEnabled="{Binding IsPeriodic}"/>
+                                      IsEnabled="{Binding PublishIsPeriodic}"/>
                             
                             <Label Content="ms"/>
                         </StackPanel>
@@ -616,7 +616,7 @@
                 <StackPanel Orientation="Horizontal">
                     <iconPacks:PackIconEntypo Width="16" 
                                               Height="16" 
-                                              Kind="Message"/>
+                                              Kind="TimeSlot"/>
 
                     <!--<mah:MetroProgressBar Width="100"
                                           IsIndeterminate="True">

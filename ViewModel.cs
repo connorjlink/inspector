@@ -101,27 +101,7 @@ namespace inspector
         }
 
 
-        // TODO: abstract this stuff below away (since Viewmodel is not responsible for `business logic`)
-        public void PauseAll()
-        {
-            _mqttScheduler.PauseAll();
-            AreAllPaused = true;
-            UpdatePublishTab();
-        }
-
-        public void ResumeAll()
-        {
-            _mqttScheduler.ResumeAll();
-            AreAllPaused = false;
-            UpdatePublishTab();
-        }
-
-        public void KillAll()
-        {
-            _mqttScheduler.KillAll();
-            UpdatePublishTab();
-        }
-        // refactor above
+        
 
 
         
@@ -1105,7 +1085,7 @@ namespace inspector
                     return "ONLINE";
                 }
 
-                if (IsPeriodic)
+                if (PublishIsPeriodic)
                 {
                     return "PENDING";
                 }
@@ -1114,6 +1094,8 @@ namespace inspector
             }
         }
 
+
+        // TODO: abstract this stuff below away (since Viewmodel is not responsible for `business logic`)
         public void Pause()
         {
             if (_mqttScheduler.TryPauseMessage(PublishTopic))
@@ -1136,6 +1118,30 @@ namespace inspector
             WriteConsole($"Could not resume {PublishTopic}", LogLevel.Error);
         }
 
+        public void PauseAll()
+        {
+            _mqttScheduler.PauseAll();
+            AreAllPaused = true;
+            UpdatePublishTab();
+        }
+
+        public void ResumeAll()
+        {
+            _mqttScheduler.ResumeAll();
+            AreAllPaused = false;
+            UpdatePublishTab();
+        }
+
+        public void KillAll()
+        {
+            _mqttScheduler.KillAll();
+            UpdatePublishTab();
+        }
+        // refactor above
+
+
+
+
         public async void Publish()
         {
             bool hadError = false;
@@ -1143,9 +1149,9 @@ namespace inspector
             const string context = "publish";
 
             if (PublishTopic == "") HandleMissing("topic", context, ref hadError);
-            if (IsPeriodic)
+            if (PublishIsPeriodic)
             {
-                if (PeriodicRate == "") HandleMissing("periodic interval", context, ref hadError);
+                if (PublishPeriodicRate == "") HandleMissing("periodic interval", context, ref hadError);
             }
 
             if (hadError)
@@ -1161,7 +1167,7 @@ namespace inspector
                 {
                     case MessageFormat.String:
                         {
-                            if (!IsPeriodic)
+                            if (!PublishIsPeriodic)
                             {
                                 var applicationMessage = new MqttApplicationMessageBuilder()
                                     .WithTopic(PublishTopic)
@@ -1183,7 +1189,7 @@ namespace inspector
                                 // TODO: add support for other publish formats (binary, protobuf) here!
                                 if (!IsTransmitting)
                                 {
-                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, RetainFlag, int.Parse(PeriodicRate));
+                                    _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, PublishRetainFlag, int.Parse(PublishPeriodicRate));
                                 }
 
                                 else

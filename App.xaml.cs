@@ -9,7 +9,6 @@ namespace inspector
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            Dark.Net.DarkNet.Instance.SetCurrentProcessTheme(Dark.Net.Theme.Auto);
         }
     }
 }

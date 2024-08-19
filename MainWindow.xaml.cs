@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.ObjectModel;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -22,17 +23,17 @@ namespace inspector
         public MainWindow()
         {
             InitializeComponent();
-            Dark.Net.DarkNet.Instance.SetWindowThemeWpf(this, Dark.Net.Theme.Auto);
-
             this.DataContext = new ViewModel();
-            _viewmodel.ConsoleData.CollectionChanged += ConsoleOutput_CollectionChanged;
+
+            // TODO: fix the program crash when using these and trying to clear the lists
+            //_viewmodel.ConsoleData.CollectionChanged += ConsoleData_CollectionChanged;
             //_viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_CollectionChanged;
         }
 
-        private void ConsoleOutput_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        private void ConsoleData_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             // autoscroll the list to the most recent items
-            consoleOutput.ScrollIntoView(consoleOutput.Items[consoleOutput.Items.Count - 1]);
+            consoleData.ScrollIntoView(_viewmodel.ConsoleData.ElementAt(_viewmodel.ConsoleData.Count() - 1));
         }
 
         private void AllMessagesData_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -40,6 +41,19 @@ namespace inspector
             // autoscroll the data grid to the most recent items
             allMessagesData.ScrollIntoView(allMessagesData.Items[allMessagesData.Items.Count - 1]);
         }
+
+
+        private void ClearDataButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            _viewmodel.ClearData();
+        }
+
+
+        private void ClearConsoleButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            _viewmodel.ClearConsole();
+        }
+
 
         private void PauseAllButton_Clicked(object sender, RoutedEventArgs e)
         {
@@ -79,7 +93,7 @@ namespace inspector
 
         private void ConnectButton_Clicked(object sender, RoutedEventArgs e)
         {
-            if (_viewmodel.Connected)
+            if (_viewmodel.IsConnected)
             {
                 _viewmodel.Disconnect();
             }
@@ -105,7 +119,6 @@ namespace inspector
 
         private void SilenceNotification(object sender, RoutedEventArgs e)
         {
-            _viewmodel.ShowNotification = false;
             _viewmodel.NotificationCount = 0;
         }
     }

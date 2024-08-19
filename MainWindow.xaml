@@ -10,8 +10,7 @@
         Title="MQTT Inspector" 
         Height="720" 
         Width="1280"
-        ResizeMode="CanResizeWithGrip"
-        Style="{DynamicResource MahApps.Styles.MetroWindow.VisualStudio}">
+        ResizeMode="CanResizeWithGrip">
 
     <Window.Resources>
         <ResourceDictionary>
@@ -23,7 +22,6 @@
             <local:ConnectionStatusConverter x:Key="ConnectionStatusConverter"/>
             <local:ConnectTextConverter x:Key="ConnectTextConverter"/>
             <local:NotificationBrushConverter x:Key="NotificationBrushConverter"/>
-            <local:NotificationTooltipConverter x:Key="NotificationTooltipConverter"/>
             <local:SubscribeStatusConverter x:Key="SubscribeStatusConverter"/>
             <local:PauseResumeButtonConverter x:Key="PauseResumeButtonConverter"/>
             <local:PauseAllTextConverter x:Key="PauseAllTextConverter"/>
@@ -39,7 +37,7 @@
         <mah:WindowCommands ShowSeparators="False">
             <Button Visibility="{Binding ShowNotification, Converter={StaticResource BooleanToVisibilityConverter}}" 
                     Style="{StaticResource MahApps.Styles.Button.Window.Notification.VisualStudio}"
-                    ToolTip="{Binding NotificationCount, Converter={StaticResource NotificationTooltipConverter}}"
+                    ToolTip="{Binding NotificationToolTip}"
                     Click="SilenceNotification">
                 <iconPacks:PackIconEntypo Width="16" Height="16" Kind="Flag"/>
             </Button>
@@ -71,8 +69,7 @@
                     Grid.RowSpan="3"
                     Grid.Column="0"
                     Margin="10">
-            <TabItem Name="ConnectTab" 
-                     Header="Connect">
+            <TabItem Header="Connect">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -87,12 +84,13 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal">
                             <Label Content="Connection Status:"/>
-                            <Label Content="{Binding Connected, Converter={StaticResource ConnectionStatusConverter}}"/>
+                            <Label Content="{Binding IsConnected, Converter={StaticResource ConnectionStatusConverter}}"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Broker connection selection area -->
-                    <Grid Grid.Row="1">
+                    <Grid Grid.Row="1"
+                          IsEnabled="{Binding IsDisconnected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -101,17 +99,17 @@
                         <StackPanel Margin="5" 
                                     Grid.Column="0">
                             <Label Content="Broker IP"/>
+                            
                             <ComboBox IsEditable="True"
-                                      Text="{Binding IP}"
-                                      IsEnabled="{Binding NotConnected}"/>
+                                      Text="{Binding ConnectIP}"/>
                         </StackPanel>
 
                         <StackPanel Margin="5" 
                                     Grid.Column="1">
                             <Label Content="Broker Port"/>
+                            
                             <ComboBox IsEditable="True"
-                                      Text="{Binding Port}"
-                                      IsEnabled="{Binding NotConnected}"/>
+                                      Text="{Binding ConnectPort}"/>
                         </StackPanel>
                     </Grid>
 
@@ -123,9 +121,9 @@
                         <StackPanel>
                             <CheckBox Margin="5"
                                       Content="Enable TLS Encryption"
-                                      IsChecked="{Binding EnableTLS}"/>
+                                      IsChecked="{Binding ConnectEnableTLS}"/>
 
-                            <Grid IsEnabled="{Binding EnableTLS}">
+                            <Grid IsEnabled="{Binding ConnectEnableTLS}">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
@@ -142,30 +140,44 @@
 
                                 <!-- Root CA cert -->
                                 <Label Grid.Row="0"
-                                       Content="Root CA Certificate Path:"/>
+                                       Content="Root CA Certificate Filepath"/>
+                                
                                 <TextBox Grid.Row="1"
-                                         Text="{Binding CACert}"/>
+                                         Text="{Binding ConnectCertCA}"
+                                         Margin="0, 0, 10, 0"/>
+                                
                                 <Button Grid.Row="1"
                                         Grid.Column="1"
-                                        Content="Select Path"/>
+                                        Content="Choose"
+                                        Padding="10, 0, 10, 0"/>
 
+                                
                                 <!-- Local client cert -->
                                 <Label Grid.Row="2"
-                                       Content="Client Certificate Path:"/>
+                                       Content="Client Certificate Filepath"/>
+                                
                                 <TextBox Grid.Row="3"
-                                         Text="{Binding ClientCert}"/>
+                                         Text="{Binding ConnectCertClient}"
+                                         Margin="0, 0, 10, 0"/>
+                                
                                 <Button Grid.Row="3"
                                         Grid.Column="1"
-                                        Content="Select Path"/>
+                                        Content="Choose"
+                                        Padding="10, 0, 10, 0"/>
 
+                                
                                 <!-- Client private key -->
                                 <Label Grid.Row="4"
-                                       Content="Private Key Path:"/>
+                                       Content="Private Key Filepath"/>
+                                
                                 <TextBox Grid.Row="5"
-                                         Text="{Binding PrivateKey}"/>
+                                         Text="{Binding ConnectCertPrivate}"
+                                         Margin="0, 0, 10, 0"/>
+                                
                                 <Button Grid.Row="5"
                                         Grid.Column="1"
-                                        Content="Select Path"/>
+                                        Content="Choose"
+                                        Padding="10, 0, 10, 0"/>
                             </Grid>
                         </StackPanel>
 
@@ -176,16 +188,16 @@
 
                     <Button Margin="5" 
                             Grid.Row="5" 
-                            Content="{Binding Connected, Converter={StaticResource ConnectTextConverter}}"
+                            Content="{Binding IsConnected, Converter={StaticResource ConnectTextConverter}}"
                             Click="ConnectButton_Clicked"/>
                 </Grid>
 
             </TabItem>
 
-            <TabItem Name="SubscribeTab" 
-                     Header="Subscribe">
+            <TabItem Header="Subscribe">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -201,13 +213,13 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal">
                             <Label Content="Connection Status:"/>
-                            <Label Content="{Binding Connected, Converter={StaticResource ConnectionStatusConverter}}"/>
+                            <Label Content="{Binding IsConnected, Converter={StaticResource ConnectionStatusConverter}}"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Broker subscribe area -->
                     <Grid Grid.Row="1"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -216,6 +228,7 @@
                         <StackPanel Margin="5" 
                                     Grid.Column="0">
                             <Label Content="MQTT Topic"/>
+                            
                             <ComboBox IsEditable="True"
                                       Text="{Binding SubscribeTopic}"/>
                         </StackPanel>
@@ -224,6 +237,7 @@
                                     Grid.Column="1"
                                     IsEnabled="{Binding IsSubscribeQoSEditable}">
                             <Label Content="Quality of Service"/>
+                            
                             <ComboBox SelectedItem="{Binding SubscribeQoS, Converter={StaticResource QualityOfServiceConverter}}"
                                       ItemsSource="{Binding QoSOptions}"/>
                         </StackPanel>
@@ -233,35 +247,34 @@
                             Margin="5"
                             Content="{Binding IsSubscribedToCurrent, Converter={StaticResource SubscribeStatusConverter}}"
                             Click="SubscribeButton_Clicked"
-                            IsEnabled="{Binding Connected}"/>
+                            IsEnabled="{Binding IsConnected}"/>
+
+                    <Separator Grid.Row="3"
+                               Margin="5"/>
 
                     <!-- Subscribed topics area -->
-                    <Grid Grid.Row="3"
+                    <Grid Grid.Row="4"
                           Margin="5"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <Label>Subscribed Messages</Label>
+                        <Label Grid.Row="0"
+                               Content="Subscribed Messages"/>
+
                         <ListView Grid.Row="1"
-                                  ItemsSource="{Binding SubscribedTopics}"
+                                  ItemsSource="{Binding SubscribedMessagesData}"
                                   Name="subscribedTopics"
                                   BorderBrush="Gray"
                                   BorderThickness="2">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}"/>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
                         </ListView>
                     </Grid>
                 </Grid>
             </TabItem>
 
-            <TabItem Name="PublishTab" 
-                     Header="Publish">
+            <TabItem Header="Publish">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -286,13 +299,13 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal">
                             <Label Content="Connection Status:"/>
-                            <Label Content="{Binding Connected, Converter={StaticResource ConnectionStatusConverter}}"/>
+                            <Label Content="{Binding IsConnected, Converter={StaticResource ConnectionStatusConverter}}"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Topic/QoS publish area -->
                     <Grid Grid.Row="1"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -316,7 +329,7 @@
 
                     <!-- message/format publish area -->
                     <Grid Grid.Row="2"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -332,18 +345,15 @@
                         <StackPanel Grid.Column="1"
                                     Margin="5">
                             <Label Content="Publish Format"/>
-                            <ComboBox Text="{Binding PublishFormat}">
-                                <ComboBoxItem>String</ComboBoxItem>
-                                <ComboBoxItem>Binary</ComboBoxItem>
-                                <ComboBoxItem>Protobuf3</ComboBoxItem>
-                            </ComboBox>
+                            <ComboBox SelectedItem="{Binding PublishMessageFormat}"
+                                      ItemsSource="{Binding MessageFormatOptions}"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- configuration flags area -->
                     <Grid Grid.Row="3"
                           Margin="5"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -356,6 +366,7 @@
                         </Grid.ColumnDefinitions>
 
                         <Label Grid.Row="0"
+                               Grid.Column="0"
                                Content="MQTT Configuration"/>
 
                         <CheckBox Grid.Row="1"
@@ -367,20 +378,22 @@
                                     Orientation="Horizontal">
                             <CheckBox Content="Periodic"
                                       IsChecked="{Binding IsPeriodic}"/>
+                            
                             <ComboBox Margin="5"
                                       Text="{Binding PeriodicRate}"
                                       IsEditable="True"
                                       IsEnabled="{Binding IsPeriodic}"/>
+                            
                             <Label Content="ms"/>
                         </StackPanel>
                     </Grid>
 
                     <Separator Grid.Row="4"
                                Margin="5"/>
-                    
+
                     <!-- transmission status area -->
                     <Grid Grid.Row="5"
-                          IsEnabled="{Binding Connected}">
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -427,7 +440,7 @@
                             Margin="5"
                             Content="{Binding PublishStatus}"
                             Click="PublishButton_Clicked"
-                            IsEnabled="{Binding Connected}"/>
+                            IsEnabled="{Binding IsConnected}"/>
 
                     <Grid Grid.Row="8"
                           Margin="5"
@@ -457,7 +470,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        
+
                         <Label Grid.Row="0"
                                Content="Current Messages"/>
 
@@ -484,12 +497,33 @@
         <TabControl Grid.Row="0" 
                     Grid.Column="2" 
                     Margin="10">
-            <TabItem Name="AllMessagesTab" 
-                     Header="All Messages">
+            <TabItem Header="All Messages">
                 <Grid>
                     <DataGrid Name="allMessagesData"
-                              DataContext="{Binding AllMessagesData}"
-                              ItemsSource="{Binding}"
+                              ItemsSource="{Binding AllMessagesData}"
+                              IsReadOnly="True"
+                              AutoGenerateColumns="True"
+                              BorderBrush="Gray"
+                              BorderThickness="2"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.IsDeferredScrollingEnabled="True" Grid.ColumnSpan="2">
+                        <!--<DataGrid.Columns>
+                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}"/>
+                            <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding Message}"/>
+                            <DataGridTextColumn Header="QoS" Binding="{Binding QoS}"/>
+                        </DataGrid.Columns>-->
+
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Live Messages">
+                <Grid>
+                    <DataGrid Name="liveMessagesData"
+                              ItemsSource="{Binding LiveMessagesData}"
                               IsReadOnly="True"
                               AutoGenerateColumns="False"
                               BorderBrush="Gray"
@@ -499,19 +533,13 @@
                               ScrollViewer.CanContentScroll="True"
                               ScrollViewer.IsDeferredScrollingEnabled="True">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}"/>
-                            <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
-                            <DataGridTextColumn Header="Message" Binding="{Binding Message}"/>
-                            <DataGridTextColumn Header="QoS" Binding="{Binding QoS}"/>
+                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Value.Timestamp}"/>
+                            <DataGridTextColumn Header="Topic" Binding="{Binding Value.Topic}"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding Value.Message}"/>
+                            <DataGridTextColumn Header="QoS" Binding="{Binding Value.QoS}"/>
                         </DataGrid.Columns>
-
                     </DataGrid>
                 </Grid>
-            </TabItem>
-
-            <TabItem Name="LiveMessagesTab" 
-                     Header="Live Messages">
-                <TabItem.Content>Something something again.</TabItem.Content>
             </TabItem>
         </TabControl>
 
@@ -528,16 +556,16 @@
 
             <ListView Grid.Row="1"
                       ItemsSource="{Binding ConsoleData}"
-                      Name="consoleOutput"
+                      Name="consoleData"
                       BorderBrush="{Binding ShowNotification, Converter={StaticResource NotificationBrushConverter}}"
                       BorderThickness="2"
                       MouseDoubleClick="SilenceNotification"
                       Margin="0, 0, 0, 10">
-                <ListView.ItemTemplate>
+                <!--<ListView.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding}"/>
                     </DataTemplate>
-                </ListView.ItemTemplate>
+                </ListView.ItemTemplate>-->
             </ListView>
 
             <Grid Grid.Row="2">
@@ -554,30 +582,50 @@
         <StatusBar Grid.Row="3"
                    Grid.ColumnSpan="3"
                    Background="{DynamicResource MahApps.Brushes.Badged.Background}">
-            
+
             <StatusBarItem>
-                <TextBlock Text="{Binding ConnectionStatusExtended}"
-                           ToolTip="{Binding ConnectionToolTip}"/>
+                <TextBlock Text="{Binding ConnectionStatus}"
+                           ToolTip="{Binding ConnectionStatusToolTip}"/>
             </StatusBarItem>
 
             <StatusBarItem>
                 <Separator/>
             </StatusBarItem>
 
-            <StatusBarItem ToolTip="{Binding JobProgressText}">
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal"
+                            ToolTip="{Binding SendingReceivingToolTip}">
+                    <iconPacks:PackIconEntypo Kind="Upload"/>
+
+                    <TextBlock Text="{Binding SendingStatus}"
+                               Margin="5, 0, 0, 0"/>
+
+                    <iconPacks:PackIconEntypo Kind="Download"
+                                  Margin="10, 0, 0, 0"/>
+
+                    <TextBlock Text="{Binding ReceivingStatus}"
+                               Margin="5, 0, 0, 0"/>
+                </StackPanel>
+            </StatusBarItem>
+
+            <StatusBarItem>
+                <Separator/>
+            </StatusBarItem>
+
+            <StatusBarItem ToolTip="{Binding JobProgressToolTip}">
                 <StackPanel Orientation="Horizontal">
                     <iconPacks:PackIconEntypo Width="16" 
-                          Height="16" 
-                          Kind="Message"/>
+                                              Height="16" 
+                                              Kind="Message"/>
 
                     <!--<mah:MetroProgressBar Width="100"
                                           IsIndeterminate="True">
                     </mah:MetroProgressBar>-->
-                    
+
                     <ProgressBar Width="100" 
                                  Height="10" 
                                  Style="{x:Null}"
-                                 IsIndeterminate="{Binding ShowProgress}"
+                                 IsIndeterminate="{Binding IsJobInProgress}"
                                  Visibility="Visible"
                                  Margin="5, 0, 0, 0"/>
                 </StackPanel>
@@ -586,23 +634,20 @@
             <StatusBarItem>
                 <Separator/>
             </StatusBarItem>
-            
-            <!-- TODO: also could do this as an up/down arrow setup like some download/upload speed things would show -->
-            <StatusBarItem>
-                <StackPanel Orientation="Horizontal"
-                            ToolTip="{Binding UploadDownloadToolTip}">
-                    <iconPacks:PackIconEntypo Kind="Upload"/>
-                    <TextBlock Text="{Binding SendingPerSecond}"
-                               Margin="5, 0, 0, 0"/>
-                    <iconPacks:PackIconEntypo Kind="Download"
-                                              Margin="10, 0, 0, 0"/>
-                    <TextBlock Text="{Binding ReceivingPerSecond}"
-                               Margin="5, 0, 0, 0"/>
-                </StackPanel>
-            </StatusBarItem>
 
-            <StatusBarItem>
-                <Separator/>
+            <StatusBarItem HorizontalAlignment="Right"
+                           Margin="0, 0, 15, 0">
+                <StackPanel Orientation="Horizontal">
+                    <Button Click="ClearDataButton_Clicked"
+                            Content="Clear Data"
+                            Padding="5, -2, 5, 0"
+                            Margin="0, 0, 5, 0"
+                            Height="15"/>
+                    <Button Click="ClearConsoleButton_Clicked"
+                            Content="Clear Console"
+                            Padding="5, -2, 5, 0"
+                            Height="15"/>
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
 

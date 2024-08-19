@@ -14,8 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DarkNet" Version="2.3.0" />
-    <PackageReference Include="MahApps.Metro" Version="2.4.10" />
+    <PackageReference Include="MahApps.Metro" Version="3.0.0-alpha0492" />
     <PackageReference Include="MahApps.Metro.IconPacks" Version="5.0.0" />
     <PackageReference Include="MQTTnet" Version="4.3.6.1152" />
   </ItemGroup>

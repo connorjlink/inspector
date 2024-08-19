@@ -9,7 +9,7 @@ using System.Windows;
 
 namespace inspector
 {
-    public class SubscribeStatusConverter : IValueConverter
+    public class SubscribeTextConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {

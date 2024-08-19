@@ -10,7 +10,8 @@
         Title="MQTT Inspector" 
         Height="720" 
         Width="1280"
-        ResizeMode="CanResizeWithGrip">
+        ResizeMode="CanResizeWithGrip"
+        Closing="Window_Closing">
 
     <Window.Resources>
         <ResourceDictionary>
@@ -22,7 +23,7 @@
             <local:ConnectionStatusConverter x:Key="ConnectionStatusConverter"/>
             <local:ConnectTextConverter x:Key="ConnectTextConverter"/>
             <local:NotificationBrushConverter x:Key="NotificationBrushConverter"/>
-            <local:SubscribeStatusConverter x:Key="SubscribeStatusConverter"/>
+            <local:SubscribeTextConverter x:Key="SubscribeTextConverter"/>
             <local:PauseResumeButtonConverter x:Key="PauseResumeButtonConverter"/>
             <local:PauseAllTextConverter x:Key="PauseAllTextConverter"/>
             <local:QualityOfServiceConverter x:Key="QualityOfServiceConverter"/>
@@ -39,7 +40,10 @@
                     Style="{StaticResource MahApps.Styles.Button.Window.Notification.VisualStudio}"
                     ToolTip="{Binding NotificationToolTip}"
                     Click="SilenceNotification">
-                <iconPacks:PackIconEntypo Width="16" Height="16" Kind="Flag"/>
+                
+                <iconPacks:PackIconEntypo Width="16" 
+                                          Height="16" 
+                                          Kind="Flag"/>
             </Button>
         </mah:WindowCommands>
     </mah:MetroWindow.RightWindowCommands>
@@ -116,8 +120,10 @@
                     <Separator Margin="5"
                                Grid.Row="2"/>
 
+                    <!-- TLS configuration selection area -->
                     <Grid Margin="5" 
-                          Grid.Row="3">
+                          Grid.Row="3"
+                          IsEnabled="{Binding IsDisconnected}">
                         <StackPanel>
                             <CheckBox Margin="5"
                                       Content="Enable TLS Encryption"
@@ -245,7 +251,7 @@
 
                     <Button Grid.Row="2"
                             Margin="5"
-                            Content="{Binding IsCurrentTopicSubscribed, Converter={StaticResource SubscribeStatusConverter}}"
+                            Content="{Binding IsCurrentTopicSubscribed, Converter={StaticResource SubscribeTextConverter}}"
                             Click="SubscribeButton_Clicked"
                             IsEnabled="{Binding IsConnected}"/>
 
@@ -315,13 +321,16 @@
                                     Grid.Column="0"
                                     IsEnabled="True">
                             <Label Content="MQTT Topic"/>
+                            
                             <ComboBox IsEditable="True"
                                       Text="{Binding PublishTopic}"/>
                         </StackPanel>
 
                         <StackPanel Margin="5" 
-                                    Grid.Column="1">
+                                    Grid.Column="1"
+                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="Quality of Service"/>
+                            
                             <ComboBox SelectedItem="{Binding PublishQoS, Converter={StaticResource QualityOfServiceConverter}}"
                                       ItemsSource="{Binding QoSOptions}"/>
                         </StackPanel>
@@ -336,15 +345,19 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0"
-                                    Margin="5">
+                                    Margin="5"
+                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="MQTT Message"/>
+                            
                             <ComboBox IsEditable="True"
                                       Text="{Binding PublishMessage}"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1"
-                                    Margin="5">
+                                    Margin="5"
+                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="Publish Format"/>
+                            
                             <ComboBox SelectedItem="{Binding PublishMessageFormat}"
                                       ItemsSource="{Binding MessageFormatOptions}"/>
                         </StackPanel>
@@ -354,38 +367,46 @@
                     <Grid Grid.Row="3"
                           Margin="5"
                           IsEnabled="{Binding IsConnected}">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                        <Grid IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                        <Label Grid.Row="0"
-                               Grid.Column="0"
-                               Content="MQTT Configuration"/>
+                            <Label Grid.Row="0"
+                                   Grid.Column="0"
+                                   Content="MQTT Configuration"/>
 
-                        <CheckBox Grid.Row="1"
-                                  Grid.Column="0"
-                                  Content="Retain Flag"/>
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="0"
+                                      Content="Retain Flag"
+                                      HorizontalAlignment="Center"/>
 
-                        <StackPanel Grid.Row="1"
-                                    Grid.Column="1"
-                                    Orientation="Horizontal">
-                            <CheckBox Content="Periodic"
-                                      IsChecked="{Binding PublishIsPeriodic}"/>
-                            
-                            <ComboBox Margin="5"
-                                      Text="{Binding PublishPeriodicRate}"
-                                      IsEditable="True"
-                                      IsEnabled="{Binding PublishIsPeriodic}"/>
-                            
-                            <Label Content="ms"/>
-                        </StackPanel>
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Content="Periodic"
+                                      IsChecked="{Binding PublishIsPeriodic}"
+                                      HorizontalAlignment="Center"/>
+
+                            <StackPanel Grid.Row="1"
+                                        Grid.Column="2"
+                                        Orientation="Horizontal">
+                                <ComboBox Margin="5"
+                                          Text="{Binding PublishPeriodicRate}"
+                                          IsEditable="True"
+                                          IsEnabled="{Binding PublishIsPeriodic}"
+                                          ToolTip="Periodic repeat rate intervall in milliseconds"/>
+
+                                <Label Content="ms"
+                                       Margin="0, 5, 0, 0"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
 
                     <Separator Grid.Row="4"
@@ -436,36 +457,42 @@
                     <Separator Grid.Row="6"
                                Margin="5"/>
 
-                    <Button Grid.Row="7"
-                            Margin="5"
-                            Content="{Binding PublishStatus}"
-                            Click="PublishButton_Clicked"
-                            IsEnabled="{Binding IsConnected}"/>
+                    <!-- Publish, Pause/Resume All, Kill All buttons area -->
+                    <StackPanel Grid.Row="8"
+                                Margin="5"
+                                IsEnabled="{Binding IsConnected}">
+                        <Button Grid.Row="7"
+                                Margin="0, 0, 0, 10"
+                                Content="{Binding PublishStatus}"
+                                Click="PublishButton_Clicked"
+                                IsEnabled="{Binding IsConnected}"/>
+                        
+                        <Grid IsEnabled="{Binding IsAnyTopicScheduled}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Row="8"
-                          Margin="5"
-                          IsEnabled="{Binding IsAnyTopicScheduled}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    Content="{Binding IsPeriodicGloballyPaused, Converter={StaticResource PauseAllTextConverter}}"
+                                    Click="PauseAllButton_Clicked"
+                                    Margin="0, 0, 5, 0"/>
 
-                        <Button Grid.Column="0"
-                                Content="{Binding IsPeriodicGloballyPaused, Converter={StaticResource PauseAllTextConverter}}"
-                                Click="PauseAllButton_Clicked"
-                                Margin="0, 0, 5, 0"/>
-
-                        <Button Grid.Column="1"
-                                Content="Kill All"
-                                Click="KillAllButton_Clicked"
-                                Margin="5, 0, 0, 0"/>
-                    </Grid>
-
+                            <Button Grid.Column="1"
+                                    Content="Kill All"
+                                    Click="KillAllButton_Clicked"
+                                    Margin="5, 0, 0, 0"/>
+                        </Grid>
+                    </StackPanel>
+                    
+                    
                     <Separator Grid.Row="9"
                                Margin="5"/>
 
+                    <!-- current publish message box area -->
                     <Grid Grid.Row="10"
-                          Margin="5">
+                          Margin="5"
+                          IsEnabled="{Binding IsConnected}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
@@ -502,6 +529,7 @@
                               ItemsSource="{Binding AllMessagesData}"
                               IsReadOnly="True"
                               AutoGenerateColumns="True"
+                              AlternationCount="2"
                               BorderBrush="Gray"
                               BorderThickness="2"
                               EnableRowVirtualization="True"
@@ -525,6 +553,7 @@
                               ItemsSource="{Binding LiveMessagesData}"
                               IsReadOnly="True"
                               AutoGenerateColumns="False"
+                              AlternationCount="2"
                               BorderBrush="Gray"
                               BorderThickness="2"
                               EnableRowVirtualization="True"
@@ -532,10 +561,10 @@
                               ScrollViewer.CanContentScroll="True"
                               ScrollViewer.IsDeferredScrollingEnabled="True">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Value.Timestamp}"/>
-                            <DataGridTextColumn Header="Topic" Binding="{Binding Value.Topic}"/>
-                            <DataGridTextColumn Header="Message" Binding="{Binding Value.Message}"/>
-                            <DataGridTextColumn Header="QoS" Binding="{Binding Value.QoS}"/>
+                            <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}"/>
+                            <DataGridTextColumn Header="Topic" Binding="{Binding Topic}"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding Message}"/>
+                            <DataGridTextColumn Header="QoS" Binding="{Binding QoS}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -646,11 +675,14 @@
                             Content="Clear Data"
                             Padding="5, -2, 5, 0"
                             Margin="0, 0, 5, 0"
-                            Height="15"/>
+                            Height="15"
+                            IsEnabled="{Binding AllMessagesDataExists}"/>
+                    
                     <Button Click="ClearConsoleButton_Clicked"
                             Content="Clear Console"
                             Padding="5, -2, 5, 0"
-                            Height="15"/>
+                            Height="15"
+                            IsEnabled="{Binding ConsoleDataExists}"/>
                 </StackPanel>
             </StatusBarItem>
         </StatusBar>

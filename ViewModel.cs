@@ -20,12 +20,13 @@ using System.Windows.Navigation;
 
 namespace inspector
 {
+#pragma warning disable 8618
     public class ViewModel : INotifyPropertyChanged
     {
         /// <summary>
         /// Boilerplate code for the INotifyPropertyChanged interface
         /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -37,7 +38,6 @@ namespace inspector
         
         // number of seconds over which we average message txfer rates
         private const int HISTORY_LENGTH = 2;
-
 
 
         private static MqttFactory _mqttFactory;
@@ -69,7 +69,7 @@ namespace inspector
             _jobScheduler = new JobScheduler();
 
             var timer = new System.Timers.Timer(1000);
-            timer.Elapsed += ComputeMessagesPerSecond;
+            timer.Elapsed += (s, ea) => ComputeMessagesPerSecond();
             timer.AutoReset = true;
             timer.Start();
 
@@ -78,6 +78,17 @@ namespace inspector
             {
                 OnPropertyChanged(nameof(IsCurrentTopicSubscribed));
                 OnPropertyChanged(nameof(IsSubscribeQoSEditable));
+            };
+
+
+            ConsoleData.CollectionChanged += (s, ea) =>
+            {
+                OnPropertyChanged(nameof(ConsoleDataExists));
+            };
+
+            AllMessagesData.CollectionChanged += (s, ea) =>
+            {
+                OnPropertyChanged(nameof(AllMessagesDataExists));
             };
         }
 
@@ -108,52 +119,7 @@ namespace inspector
         }
 
 
-        private string FormatRate(Queue<int> queue)
-        {
-            if (IsConnected)
-            {
-                if (queue.Count > 0)
-                {
-                    return $"{queue.Average()}/s";
-                }
-
-                return "0/s";
-            }
-
-            return "N/A";
-        }
-
-
-        private void ComputeMessagesPerSecondImpl(ref int lastCount, ref int currentCount, Queue<int> queue)
-        {
-            var diff = currentCount - lastCount;
-            lastCount = currentCount;
-
-            queue.Enqueue(diff);
-
-            if (queue.Count > HISTORY_LENGTH)
-            {
-                queue.Dequeue();
-            }
-        }
-
-        private void ComputeMessagesPerSecond(Object source, ElapsedEventArgs e)
-        {
-            ComputeMessagesPerSecondImpl(ref _lastSentCount, ref _currentSentCount, _sendingPerSecondQueue);
-            ComputeMessagesPerSecondImpl(ref _lastReceivedCount, ref _currentReceivedCount, _receivingPerSecondQueue);
-
-            OnPropertyChanged(nameof(ReceivingStatus));
-            OnPropertyChanged(nameof(SendingStatus));
-
-            OnPropertyChanged(nameof(SendingReceivingToolTip));
-        }
-
-
-        private void UpdateJobProgress()
-        {
-            OnPropertyChanged(nameof(IsJobInProgress));
-            OnPropertyChanged(nameof(JobProgressToolTip));
-        }
+        
 
 
 
@@ -175,6 +141,70 @@ namespace inspector
         public ObservableCollection<MessageFormat> MessageFormatOptions
         {
             get => MESSAGEFORMAT_OPTIONS;
+        }
+        #endregion
+
+
+
+        #region Statusbar Helper Functions
+        /// <summary>
+        /// FormatRate() returns the formatted string representing the average message rate from the given datapoint queue for the Statusbar send/receive indicator
+        /// </summary>
+        private string FormatRate(Queue<int> queue)
+        {
+            if (IsConnected)
+            {
+                if (queue.Count > 0)
+                {
+                    return $"{queue.Average()}/s";
+                }
+
+                return "0/s";
+            }
+
+            return "N/A";
+        }
+
+
+        /// <summary>
+        /// ComputeMessagesPerSecondImpl() computes the number of messages sent/received in the past second and posts it to a queue for averaging
+        /// </summary>
+        private void ComputeMessagesPerSecondImpl(ref int lastCount, ref int currentCount, Queue<int> queue)
+        {
+            var diff = currentCount - lastCount;
+            lastCount = currentCount;
+
+            queue.Enqueue(diff);
+
+            if (queue.Count > HISTORY_LENGTH)
+            {
+                queue.Dequeue();
+            }
+        }
+
+
+        /// <summary>
+        /// ComputeMessagesPerSecond() computes the send/receive message rates and updates the Statusbar send/recieve indicator accordingly
+        /// </summary>
+        private void ComputeMessagesPerSecond()
+        {
+            ComputeMessagesPerSecondImpl(ref _lastSentCount, ref _currentSentCount, _sendingPerSecondQueue);
+            ComputeMessagesPerSecondImpl(ref _lastReceivedCount, ref _currentReceivedCount, _receivingPerSecondQueue);
+
+            OnPropertyChanged(nameof(ReceivingStatus));
+            OnPropertyChanged(nameof(SendingStatus));
+
+            OnPropertyChanged(nameof(SendingReceivingToolTip));
+        }
+
+
+        /// <summary>
+        /// UpdateJobProgress() forces a refresh of the properties associated with the Statusbar job progress indicator
+        /// </summary>
+        private void UpdateJobProgress()
+        {
+            OnPropertyChanged(nameof(IsJobInProgress));
+            OnPropertyChanged(nameof(JobProgressToolTip));
         }
         #endregion
 
@@ -249,7 +279,7 @@ namespace inspector
             {
                 if (IsConnected)
                 {
-                    return $"Sending {_sendingPerSecondQueue.Average()} messages/second over {_mqttScheduler.ScheduledMessageCount()} topics\n" +
+                    return $"Sending {_sendingPerSecondQueue.Average()} messages/second over {_mqttScheduler.UnpausedMessageCount()} topics\n" +
                            $"Receiving {_receivingPerSecondQueue.Average()} messages/second";
                 }
 
@@ -347,6 +377,15 @@ namespace inspector
         }
 
 
+        /// <summary>
+        /// ConsoleDataExists stores whether or not there are any items the ConsoleData item source
+        /// </summary>
+        public bool ConsoleDataExists
+        {
+            get => (ConsoleData.Count > 0);
+        }
+
+
         private ObservableCollection<LoggedMessage> _allMessagesData = new();
         /// <summary>
         /// AllMessageData is the item source for the all messages datagrid in the Message window
@@ -357,12 +396,21 @@ namespace inspector
         }
 
 
-        // TODO: remove the dependency here on the outside library!
-        private DrWPF.Windows.Data.ObservableDictionary<string, LoggedMessage> _liveMessagesData = new();
+        /// <summary>
+        /// AllMessagesDataExists stores whether or not there are any receieved messages logged in the Message window datagrid
+        /// </summary>
+        public bool AllMessagesDataExists
+        {
+            get => (AllMessagesData.Count > 0);
+        }
+
+
+        private ObservableCollection<LoggedMessage> _liveMessagesData = new();
+        private Dictionary<string, LoggedMessage> _liveMessagesDictionary = new();
         /// <summary>
         /// LiveMessagesData is the item source for the live messages datagrid in the Message window
         /// </summary>
-        public DrWPF.Windows.Data.ObservableDictionary<string, LoggedMessage> LiveMessagesData
+        public ObservableCollection<LoggedMessage> LiveMessagesData
         {
             get => _liveMessagesData;
         }
@@ -893,7 +941,7 @@ namespace inspector
             {
                 var mqttClientOptions = new MqttClientOptionsBuilder()
                     .WithTcpServer(ConnectIP, int.Parse(ConnectPort))
-                        .Build();
+                    .Build();
 
                 int jobID = jobID = _jobScheduler.BeginJob("Connecting to MQTT broker");
 
@@ -923,17 +971,31 @@ namespace inspector
                                     string message = Encoding.UTF8.GetString(ea.ApplicationMessage.PayloadSegment);
                                     int qos = (int)ea.ApplicationMessage.QualityOfServiceLevel;
 
+                                    var allMessage = new LoggedMessage(timestamp, topic, message, qos);
+                                    var liveMessage = new LoggedMessage(timestamp, topic, message, qos);
+
                                     Application.Current.Dispatcher.Invoke(() =>
                                     {
                                         _currentReceivedCount++;
 
-                                        var loggedMessage = new LoggedMessage(timestamp, topic, message, qos);
+                                        AllMessagesData.Add(allMessage);
 
-                                        AllMessagesData.Add(loggedMessage);
-                                        LiveMessagesData[topic] = loggedMessage;
+                                        if (_liveMessagesDictionary.TryGetValue(topic, out var storedMessage))
+                                        {
+                                            storedMessage.Timestamp = liveMessage.Timestamp;
+                                            storedMessage.Message = liveMessage.Message;
+                                            storedMessage.QoS = liveMessage.QoS;
+                                        }
+
+                                        else
+                                        {
+                                            _liveMessagesDictionary[topic] = liveMessage;
+                                            LiveMessagesData.Add(liveMessage);
+                                        }
 
                                         OnPropertyChanged(nameof(AllMessagesData));
                                         OnPropertyChanged(nameof(LiveMessagesData));
+
                                     });
 
                                     //await Task.Delay(1000);
@@ -985,6 +1047,7 @@ namespace inspector
                 WriteConsole($"Disconnected from {ConnectIP}:{ConnectPort}", LogLevel.Info);
 
                 SubscribedMessagesData.Clear();
+                PublishMessagesData.Clear();
             }
 
             catch
@@ -1124,25 +1187,26 @@ namespace inspector
                 return;
             }
 
-            int jobID = jobID = _jobScheduler.BeginJob("Publishing MQTT Topic");
+            int jobID = _jobScheduler.BeginJob("Publishing MQTT Topic");
 
             try
             {
+                //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, PublishQoS, RetainFlag);
+                //var response = await _mqttClient.PublishAsyncBinary();
+
                 switch (PublishMessageFormat)
                 {
                     case MessageFormat.String:
                     {
+                        var applicationMessage = new MqttApplicationMessageBuilder()
+                                .WithTopic(PublishTopic)
+                                .WithPayload(PublishMessage)
+                                .WithRetainFlag(PublishRetainFlag)
+                                .WithQualityOfServiceLevel(PublishQoS)
+                                .Build();
+
                         if (!PublishIsPeriodic)
                         {
-                            var applicationMessage = new MqttApplicationMessageBuilder()
-                                .WithTopic(PublishTopic)
-                                    .WithPayload(PublishMessage)
-                                        .WithRetainFlag(PublishRetainFlag)
-                                            .WithQualityOfServiceLevel(PublishQoS)
-                                                .Build();
-
-                            //var response = await _mqttClient.PublishStringAsync(PublishTopic, PublishMessage, PublishQoS, RetainFlag);
-
                             var response = await _mqttClient.PublishAsync(applicationMessage);
                             _currentSentCount++;
                             var retain = PublishRetainFlag ? "with" : "without";
@@ -1151,15 +1215,15 @@ namespace inspector
 
                         else
                         {
-                            // TODO: add support for other publish formats (binary, protobuf) here!
                             if (!IsCurrentTopicScheduled)
                             {
-                                _mqttScheduler.ScheduleMessage(PublishTopic, PublishMessage, PublishQoS, PublishRetainFlag, int.Parse(PublishPeriodicRate));
+                                var periodicRate = int.Parse(PublishPeriodicRate);
+                                _mqttScheduler.ScheduleMessage(applicationMessage, periodicRate);
                             }
 
                             else
                             {
-                                _mqttScheduler.TryRemoveMessageSchedule(PublishTopic);
+                                _mqttScheduler.TryRemoveMessageSchedule(applicationMessage);
                             }
                         }
                     }
@@ -1167,7 +1231,6 @@ namespace inspector
 
                     case MessageFormat.Binary:
                     {
-                        //_mqttClient.PublishAsyncBinary();
                         WriteConsole($"Publishing in binary format is not currently supported", LogLevel.Error);
                     }
                     break;
@@ -1317,6 +1380,7 @@ namespace inspector
         {
             ConsoleData.Clear();
             OnPropertyChanged(nameof(ConsoleData));
+            SilenceNotification();
         }
 
 
@@ -1327,6 +1391,17 @@ namespace inspector
         {
             NotificationCount = 0;
         }
+
+
+        public void Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (_mqttScheduler.UnpausedMessageCount() != 0)
+            {
+                WriteConsole($"Kill all periodic messages to shut down", LogLevel.Error);
+                e.Cancel = true;
+            }
+        }
         #endregion       
     }
+#pragma warning restore 8618
 }

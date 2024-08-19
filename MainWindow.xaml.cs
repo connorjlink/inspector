@@ -96,10 +96,16 @@ namespace inspector
             _viewmodel.ClearConsole();
         }
 
-        
+
         private void SilenceNotification(object sender, RoutedEventArgs e)
         {
             _viewmodel.SilenceNotification();
+        }
+
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            _viewmodel.Closing(sender, e);
         }
     }
 }

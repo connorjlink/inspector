@@ -46,7 +46,7 @@ public class MqttScheduler
         return _scheduledMessages.Count;
     }
 
-    public int ScheduledMessageCount()
+    public int UnpausedMessageCount()
     {
         // NOTE: we can't use the `Count` property here because some messages might be paused
 
@@ -61,6 +61,24 @@ public class MqttScheduler
         }
 
         return count;
+    }
+
+    public bool IsMessageScheduled(string topic)
+    {
+        return _scheduledMessages.ContainsKey(topic);
+    }
+
+    public bool IsMessagePaused(string topic)
+    {
+        if (_scheduledMessages.TryGetValue(topic, out var message))
+        {
+            if (message._paused)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void PauseAll()
@@ -95,54 +113,45 @@ public class MqttScheduler
         _scheduledMessages.Clear();
     }
 
-    public async Task PublishAsync(string topic, string payload, MqttQualityOfServiceLevel qos, bool retain)
+    public async Task PublishAsync(MqttApplicationMessage applicationMessage)
     {
-        var message = new MqttApplicationMessageBuilder()
-            .WithTopic(topic)
-                .WithPayload(payload)
-                    .WithQualityOfServiceLevel(qos)
-                        .WithRetainFlag(retain)
-                            .Build();
-
+        await ViewModel._mqttClient.PublishAsync(applicationMessage);
         _viewmodel._currentSentCount++;
-
-        await ViewModel._mqttClient.PublishAsync(message);
     }
 
-    public void ScheduleMessage(string topic, string payload, MqttQualityOfServiceLevel qos, bool retain, int intervalInMilliseconds)
+    public void ScheduleMessage(MqttApplicationMessage applicationMessage, int periodicRate)
     {
+        var topic = applicationMessage.Topic;
+
         if (_scheduledMessages.ContainsKey(topic))
         {
             throw new InvalidOperationException($"A schedule for '{topic}' already exists");
         }
 
-        var timer = new System.Timers.Timer(intervalInMilliseconds)
+        var timer = new System.Timers.Timer(periodicRate)
         {
             AutoReset = true,
             Enabled = true
         };
 
-        timer.Elapsed += async (sender, e) => await PublishAsync(topic, payload, qos, retain);
+        timer.Elapsed += async (sender, e) => await PublishAsync(applicationMessage);
 
-        // NOTE: the Messaage constructor defaults to *not paused*
+        // NOTE: the ScheduledMessage constructor defaults to *not paused*
         _scheduledMessages[topic] = new ScheduledMessage(timer);
 
-        _viewmodel.WriteConsole($"Started transmitting {topic} every {intervalInMilliseconds} ms", LogLevel.Info);
-    }
-    
-    public bool IsMessageScheduled(string topic)
-    {
-        return _scheduledMessages.ContainsKey(topic);
+        _viewmodel.WriteConsole($"Started transmitting {topic} every {periodicRate} ms", LogLevel.Info);
     }
 
-    public bool IsMessagePaused(string topic)
+    public bool TryRemoveMessageSchedule(MqttApplicationMessage applicationMessage)
     {
-        if (_scheduledMessages.TryGetValue(topic, out var message))
+        var topic = applicationMessage.Topic;
+
+        if (_scheduledMessages.TryRemove(topic, out var message))
         {
-            if (message._paused)
-            {
-                return true;
-            }
+            _viewmodel.WriteConsole($"Stopped transmitting {topic}", LogLevel.Info);
+            message._timer.Stop();
+            message._timer.Dispose();
+            return true;
         }
 
         return false;
@@ -168,19 +177,6 @@ public class MqttScheduler
             _viewmodel.WriteConsole($"Resumed {topic}", LogLevel.Info);
             message._timer.Start();
             message._paused = false;
-            return true;
-        }
-
-        return false;
-    }
-
-    public bool TryRemoveMessageSchedule(string topic)
-    {
-        if (_scheduledMessages.TryRemove(topic, out var message))
-        {
-            _viewmodel.WriteConsole($"Stopped transmitting {topic}", LogLevel.Info);
-            message._timer.Stop();
-            message._timer.Dispose();
             return true;
         }
 

@@ -1195,7 +1195,7 @@ namespace inspector
         /// <summary>
         /// Publish() publishes the topic currently selected in the Publish tab with the specified quality of service, payload/message, and format
         /// </summary>
-        public async void Publish()
+        public async Task Publish()
         {
             bool hadError = false;
 
@@ -1378,7 +1378,7 @@ namespace inspector
         /// <summary>
         /// ExecuteCommand() parses and executes the command currently selected in the console
         /// </summary>
-        public void ExecuteCommand()
+        public async Task ExecuteCommand()
         {
             bool ValidateConnection(string context)
             {
@@ -1519,7 +1519,7 @@ namespace inspector
                         var interval = items[4].Trim("@ms");
                         PublishPeriodicRate = interval;
 
-                        Publish();
+                        await Publish();
                     }
                     break;
 
@@ -1536,7 +1536,7 @@ namespace inspector
                             break;
                         }
 
-                        Publish();
+                        await Publish();
                     }
                     break;
 
@@ -1564,7 +1564,7 @@ namespace inspector
 
                         PublishIsPeriodic = false;
 
-                        Publish();
+                        await Publish();
                     }
                     break;
 
@@ -1655,6 +1655,7 @@ namespace inspector
 
             ConsoleText = string.Empty;
             _jobScheduler.EndJob(jobID);
+            UpdateJobProgress();
         }
 
 

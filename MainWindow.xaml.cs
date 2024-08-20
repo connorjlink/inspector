@@ -30,7 +30,7 @@ namespace inspector
             _viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_OnCollectionChanged;
 
             _viewmodel.ConsoleText = "help";
-            _viewmodel.ExecuteCommand();
+            var _ = _viewmodel.ExecuteCommand();
         }
 
         /// <summary>
@@ -116,9 +116,9 @@ namespace inspector
         }
 
 
-        private void PublishButton_Clicked(object sender, RoutedEventArgs e)
+        private async void PublishButton_Clicked(object sender, RoutedEventArgs e)
         {
-            _viewmodel.Publish();
+            await _viewmodel.Publish();
         }
 
 
@@ -140,9 +140,9 @@ namespace inspector
         }
 
 
-        private void ExecuteCommandButton_Clicked(object sender, RoutedEventArgs e)
+        private async void ExecuteCommandButton_Clicked(object sender, RoutedEventArgs e)
         {
-            _viewmodel.ExecuteCommand();
+            await _viewmodel.ExecuteCommand();
         }
 
 
@@ -170,11 +170,11 @@ namespace inspector
         }
 
 
-        private void CommandText_KeyDown(object sender, KeyEventArgs e)
+        private async void CommandText_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                _viewmodel.ExecuteCommand();
+                await _viewmodel.ExecuteCommand();
                 e.Handled = true;
             }
         }

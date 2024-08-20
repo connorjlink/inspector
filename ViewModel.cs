@@ -879,6 +879,25 @@ namespace inspector
 
 
 
+        #region Console Window Input Properties
+        private string _consoleText = string.Empty;
+        /// <summary>
+        /// 
+        /// </summary>
+        public string ConsoleText
+        {
+            get => _consoleText;
+
+            set
+            {
+                _consoleText = value;
+                OnPropertyChanged(nameof(ConsoleText));
+            }
+        }
+        #endregion
+
+
+
         #region Button Callback Helper Functions
         private void HandleMissing(string whatsMissing, string context, ref bool hadError)
         {
@@ -898,13 +917,19 @@ namespace inspector
 
         private void UpdatePublishTab()
         {
+            OnPropertyChanged(nameof(PublishTopic));
+            OnPropertyChanged(nameof(PublishQoS));
+            OnPropertyChanged(nameof(PublishMessage));
+            OnPropertyChanged(nameof(PublishMessageFormat));
+            OnPropertyChanged(nameof(PublishRetainFlag));
             OnPropertyChanged(nameof(PublishIsPeriodic));
-            OnPropertyChanged(nameof(IsCurrentTopicScheduled));
+            OnPropertyChanged(nameof(PublishPeriodicRate));
             OnPropertyChanged(nameof(PublishStatus));
             OnPropertyChanged(nameof(TransmissionStatus));
-            OnPropertyChanged(nameof(IsCurrentTopicPausable));
-            OnPropertyChanged(nameof(IsCurrentTopicPaused));
+            OnPropertyChanged(nameof(IsCurrentTopicScheduled));
             OnPropertyChanged(nameof(IsCurrentTopicOnline));
+            OnPropertyChanged(nameof(IsCurrentTopicPaused));
+            OnPropertyChanged(nameof(IsCurrentTopicPausable));
             OnPropertyChanged(nameof(IsAnyTopicScheduled));
         }
         #endregion
@@ -1351,12 +1376,285 @@ namespace inspector
 
 
         /// <summary>
-        /// ExecuteCommand() parses and executes the command curently selected in the console
+        /// ExecuteCommand() parses and executes the command currently selected in the console
         /// </summary>
         public void ExecuteCommand()
         {
-            // TODO: implement command processing/parsing here!
-            WriteConsole($"Executing command...", LogLevel.Info);
+            bool ValidateConnection(string context)
+            {
+                if (!IsConnected)
+                {
+                    WriteConsole($"Connect to a broker before {context}", LogLevel.Error);
+                    return false;
+                }
+
+                return true;
+            }
+
+            int jobID = _jobScheduler.BeginJob("Executing console command");
+
+            try
+            {
+                // TODO: better delimiting here since this just splits by space (and our payload might have spaces...)
+                var items = ConsoleText.Split();
+
+                var command = items[0].ToLower();
+
+                switch (command)
+                {
+                case "set":
+                    {
+                        var property = items[1];
+
+                        switch (property)
+                        {
+                        case "cacert":
+                            {
+                                var cert = items[2];
+                                ConnectCertCA = cert;
+                                WriteConsole($"Set the root CA certificate file path", LogLevel.Info);
+                            } break;
+
+                        case "clientcert":
+                            {
+                                var cert = items[2];
+                                ConnectCertClient = cert;
+                                WriteConsole($"Set the local client certificate file path", LogLevel.Info);
+                            }
+                            break;
+
+                        case "privatekey":
+                            {
+                                var cert = items[2];
+                                ConnectCertPrivate = cert;
+                                WriteConsole($"Set the private key certificate file path", LogLevel.Info);
+                            }
+                            break;
+
+                        default:
+                            {
+                                WriteConsole($"Unrecognized property `{property}`", LogLevel.Error);
+                            } break;
+                        }
+                    }
+                    break;
+
+                case "enabletls":
+                    {
+                        ConnectEnableTLS = true;
+                    }
+                    break;
+
+                case "disabletls":
+                    {
+                        ConnectEnableTLS = false;
+                    }
+                    break;
+
+                case "connect":
+                    {
+                        var host = items[1].Split(':');
+                        var ip = host[0];
+                        var port = host[1];
+                        ConnectIP = ip;
+                        ConnectPort = port;
+                        Connect();
+                    }
+                    break;
+
+                case "disconnect":
+                    {
+                        Disconnect();
+                    }
+                    break;
+
+                case "subscribe":
+                    {
+                        if (!ValidateConnection("subscribing")) break;
+
+                        var message = items[1].Split(':');
+                        var topic = message[0];
+                        var qos = (MqttQualityOfServiceLevel)int.Parse(message[1]);
+                        SubscribeTopic = topic;
+                        SubscribeQoS = qos;
+                        Subscribe();
+                    } 
+                    break;
+
+                case "unsubscribe":
+                    {
+                        if (!ValidateConnection("unsubscribing")) break;
+
+                        var message = items[1];
+                        var topic = message;
+                        SubscribeTopic = topic;
+                        Unsubscribe();
+                    }
+                    break;
+
+                case "start":
+                    {
+                        if (!ValidateConnection("publishing")) break;
+
+                        var message = items[1].Split(':');
+                        var topic = message[0];
+                        var qos = (MqttQualityOfServiceLevel)int.Parse(message[1]);
+                        PublishTopic = topic;
+                        PublishQoS = qos;
+
+                        if (IsCurrentTopicScheduled)
+                        {
+                            WriteConsole($"Topic must not be scheduled to start transmitting", LogLevel.Error);
+                            break;
+                        }
+
+                        // TODO: trimming quotes could result in unexpected behavior in some cases...
+                        var payload = items[2].Trim('"');
+                        var format = (MessageFormat)int.Parse(items[3]);
+                        PublishMessage = payload;
+                        PublishMessageFormat = format;
+
+                        PublishIsPeriodic = true;
+
+                        var interval = items[4].Trim("@ms");
+                        PublishPeriodicRate = interval;
+
+                        Publish();
+                    }
+                    break;
+
+                case "stop":
+                    {
+                        if (!ValidateConnection("publishing")) break;
+
+                        var topic = items[1];
+                        PublishTopic = topic;
+
+                        if (!IsCurrentTopicScheduled)
+                        {
+                            WriteConsole($"Topic must be scheduled to stop transmitting", LogLevel.Error);
+                            break;
+                        }
+
+                        Publish();
+                    }
+                    break;
+
+                case "publish":
+                    {
+                        if (!ValidateConnection("publishing")) break;
+
+                        var message = items[1].Split(':');
+                        var topic = message[0];
+                        var qos = (MqttQualityOfServiceLevel)int.Parse(message[1]);
+                        PublishTopic = topic;
+                        PublishQoS = qos;
+
+                        if (IsCurrentTopicScheduled)
+                        {
+                            WriteConsole($"Topic must not be scheduled to transmit single shot", LogLevel.Error);
+                            break;
+                        }
+
+                        var payload = items[2];
+                        payload = payload.Substring(1, payload.Length - 2);
+                        var format = (MessageFormat)int.Parse(items[3]);
+                        PublishMessage = payload;
+                        PublishMessageFormat = format;
+
+                        PublishIsPeriodic = false;
+
+                        Publish();
+                    }
+                    break;
+
+                case "pause":
+                    {
+                        if (!ValidateConnection("pausing")) break;
+
+                        var topic = items[1];
+                        PublishTopic = topic;
+
+                        if (!IsCurrentTopicScheduled)
+                        {
+                            WriteConsole($"Topic must be scheduled to pause individually", LogLevel.Error);
+                            break;
+                        }
+
+                        Pause();
+                    }
+                    break;
+
+                case "resume":
+                    {
+                        if (!ValidateConnection("resuming")) break;
+
+                        var topic = items[1];
+                        PublishTopic = topic;
+
+                        if (!IsCurrentTopicScheduled)
+                        {
+                            WriteConsole($"Topic must be scheduled to resume individually", LogLevel.Error);
+                            break;
+                        }
+
+                        Resume();
+                    }
+                    break;
+
+                case "pauseall":
+                    {
+                        if (!ValidateConnection("pausing")) break;
+                        PauseAll();
+                        WriteConsole("Paused periodic message transmission globally", LogLevel.Info);
+                    }
+                    break;
+
+                case "resumeall":
+                    {
+                        if (!ValidateConnection("resuming")) break;
+                        ResumeAll();
+                        WriteConsole("Resumed periodic message transmission globally", LogLevel.Info);
+                    }
+                    break;
+
+                case "killall":
+                    {
+                        if (!ValidateConnection("killing")) break;
+                        KillAll();
+                        WriteConsole("Killed all periodic message transmission globally", LogLevel.Info);
+                    }
+                    break;
+
+                case "silence":
+                    {
+                        SilenceNotification();
+                        WriteConsole("Silenced all notifications", LogLevel.Info);
+                    }
+                    break;
+
+                case "man":
+                case "help":
+                    {
+                        WriteConsole("See github.com/connorjlink/inspector/README.md for help with commands", LogLevel.Info);
+                    }
+                    break;
+
+                default:
+                    {
+                        WriteConsole($"Unrecognized command `{command}`", LogLevel.Info);
+                    } 
+                    break;
+                }
+            }
+
+            catch
+            {
+                WriteConsole($"Could not execute command `{ConsoleText}`", LogLevel.Error);
+            }
+
+            ConsoleText = string.Empty;
+            _jobScheduler.EndJob(jobID);
         }
 
 
@@ -1366,6 +1664,7 @@ namespace inspector
         public void ClearData()
         {
             AllMessagesData.Clear();
+            _liveMessagesDictionary.Clear();
             LiveMessagesData.Clear();
 
             OnPropertyChanged(nameof(AllMessagesData));

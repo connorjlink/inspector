@@ -13,6 +13,8 @@
         ResizeMode="CanResizeWithGrip"
         Closing="Window_Closing">
 
+    <!-- Style="{StaticResource MahApps.Styles.MetroWindow.VisualStudio}" -->
+    
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -27,6 +29,7 @@
             <local:PauseResumeButtonConverter x:Key="PauseResumeButtonConverter"/>
             <local:PauseAllTextConverter x:Key="PauseAllTextConverter"/>
             <local:QualityOfServiceConverter x:Key="QualityOfServiceConverter"/>
+            <local:BooleanInverterConverter x:Key="BooleanInverterConverter"/>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -328,7 +331,7 @@
 
                         <StackPanel Margin="5" 
                                     Grid.Column="1"
-                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
+                                    IsEnabled="{Binding IsCurrentTopicScheduled, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="Quality of Service"/>
                             
                             <ComboBox SelectedItem="{Binding PublishQoS, Converter={StaticResource QualityOfServiceConverter}}"
@@ -346,7 +349,7 @@
 
                         <StackPanel Grid.Column="0"
                                     Margin="5"
-                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
+                                    IsEnabled="{Binding IsCurrentTopicScheduled, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="MQTT Message"/>
                             
                             <ComboBox IsEditable="True"
@@ -355,7 +358,7 @@
 
                         <StackPanel Grid.Column="1"
                                     Margin="5"
-                                    IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
+                                    IsEnabled="{Binding IsCurrentTopicScheduled, Converter={StaticResource BooleanInverterConverter}}">
                             <Label Content="Publish Format"/>
                             
                             <ComboBox SelectedItem="{Binding PublishMessageFormat}"
@@ -367,7 +370,7 @@
                     <Grid Grid.Row="3"
                           Margin="5"
                           IsEnabled="{Binding IsConnected}">
-                        <Grid IsEnabled="{Binding IsCurrentTopicOnline, Converter={StaticResource BooleanInverterConverter}}">
+                        <Grid IsEnabled="{Binding IsCurrentTopicScheduled, Converter={StaticResource BooleanInverterConverter}}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -394,18 +397,24 @@
                                       IsChecked="{Binding PublishIsPeriodic}"
                                       HorizontalAlignment="Center"/>
 
-                            <StackPanel Grid.Row="1"
-                                        Grid.Column="2"
-                                        Orientation="Horizontal">
-                                <ComboBox Margin="5"
+                            <Grid Grid.Row="1"
+                                  Grid.Column="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <ComboBox Grid.Column="0"
+                                          Margin="5"
                                           Text="{Binding PublishPeriodicRate}"
                                           IsEditable="True"
                                           IsEnabled="{Binding PublishIsPeriodic}"
-                                          ToolTip="Periodic repeat rate intervall in milliseconds"/>
+                                          ToolTip="Periodic repeat rate interval in milliseconds"/>
 
-                                <Label Content="ms"
+                                <Label Grid.Column="1"
+                                       Content="ms"
                                        Margin="0, 5, 0, 0"/>
-                            </StackPanel>
+                            </Grid>
                         </Grid>
                     </Grid>
 
@@ -603,7 +612,10 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox Grid.Column="0"
-                         Margin="0, 0, 10, 0"/>
+                         Margin="0, 0, 10, 0"
+                         Name="consoleText"
+                         Text="{Binding ConsoleText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         KeyDown="CommandText_KeyDown"/>
                 
                 <Button Grid.Column="1" 
                         Content="Execute Command"

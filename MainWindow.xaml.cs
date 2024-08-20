@@ -26,9 +26,70 @@ namespace inspector
             this.DataContext = new ViewModel();
 
             // TODO: fix the program crash when using these and trying to clear the lists
-            //_viewmodel.ConsoleData.CollectionChanged += ConsoleData_CollectionChanged;
-            //_viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_CollectionChanged;
+            _viewmodel.ConsoleData.CollectionChanged += ConsoleData_OnCollectionChanged;
+            _viewmodel.AllMessagesData.CollectionChanged += AllMessagesData_OnCollectionChanged;
+
+            _viewmodel.ConsoleText = "help";
+            _viewmodel.ExecuteCommand();
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private void ConsoleData_OnCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // Check if new items were added
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                ScrollToBottom(consoleData);
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private void AllMessagesData_OnCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // Check if new items were added
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                ScrollToBottom(allMessagesData);
+            }
+        }
+
+
+
+        private void ScrollToBottom(DependencyObject view)
+        {
+            // Get the ScrollViewer from the ListView/DataGrid
+            var scrollViewer = FindVisualChild<ScrollViewer>(view);
+
+            if (scrollViewer != null)
+            {
+                scrollViewer.ScrollToBottom();
+            }
+        }
+
+        private static T FindVisualChild<T>(DependencyObject depObj) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(depObj); i++)
+            {
+                var child = VisualTreeHelper.GetChild(depObj, i);
+                if (child is T target)
+                {
+                    return target;
+                }
+
+                var childOfChild = FindVisualChild<T>(child);
+                if (childOfChild != null)
+                {
+                    return childOfChild;
+                }
+            }
+
+            return null;
+        }
+
 
         //private void ConsoleData_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         //{
@@ -106,6 +167,16 @@ namespace inspector
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             _viewmodel.Closing(sender, e);
+        }
+
+
+        private void CommandText_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                _viewmodel.ExecuteCommand();
+                e.Handled = true;
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ MQTT Inspector (_inspector_) is a C#/WPF-based Windows desktop application used 
 ![MQTT Inspector Example Layout Image](/layout.png)
 
 ## RUN INSTRUCTIONS
-Simply use the inspector.exe shortcut provided in the main folder, or run _inspector.exe_ under bin/Release/
+Simply use the inspector.exe shortcut provided in the main folder, or run the main .exe file under _/bin/Release/net9.0-windows7.0/inspector.exe_
 
 ## COMMAND CONSOLE
 _inspector_ is built around automation and features a custom command processing console. The functions currently supported are:
